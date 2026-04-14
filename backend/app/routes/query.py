@@ -1,6 +1,6 @@
 import statistics
 from fastapi import APIRouter, Query
-from app.config import settings
+import app.config
 from app.database import get_db
 from app.models import QueryResponse, HistogramBin, Stats
 
@@ -48,7 +48,7 @@ async def query_data(
 
     sql = f"SELECT max_price_after FROM extracted_data {where_clause}"
 
-    async with get_db(settings.db_path) as db:
+    async with get_db(app.config.settings.db_path) as db:
         cursor = await db.execute(sql, params)
         rows = await cursor.fetchall()
 

@@ -5,12 +5,7 @@ from httpx import AsyncClient, ASGITransport
 
 os.environ.setdefault("KALSHI_API_KEY_ID", "")
 os.environ.setdefault("KALSHI_PRIVATE_KEY_PATH", "./secrets/test.pem")
-os.environ["DB_PATH"] = "/tmp/test_main.db"
-
-# Reload config to pick up test DB_PATH
-import importlib
-import app.config
-importlib.reload(app.config)
+os.environ.setdefault("DB_PATH", "/tmp/test_main.db")
 
 from app.main import app
 
