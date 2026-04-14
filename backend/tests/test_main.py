@@ -1,25 +1,34 @@
 # backend/tests/test_main.py
 import os
+import importlib
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
-os.environ.setdefault("KALSHI_API_KEY_ID", "")
-os.environ.setdefault("KALSHI_PRIVATE_KEY_PATH", "./secrets/test.pem")
-os.environ.setdefault("DB_PATH", "/tmp/test_main.db")
-
-from app.main import app
+DB_TEST_PATH = "/tmp/test_main.db"
 
 
-@pytest.fixture(autouse=True)
-def cleanup():
+@pytest_asyncio.fixture(autouse=True)
+async def setup_and_cleanup():
+    os.environ["KALSHI_API_KEY_ID"] = ""
+    os.environ["KALSHI_PRIVATE_KEY_PATH"] = "./secrets/test.pem"
+    os.environ["DB_PATH"] = DB_TEST_PATH
+    import app.config
+    importlib.reload(app.config)
     yield
-    if os.path.exists("/tmp/test_main.db"):
-        os.remove("/tmp/test_main.db")
+    if os.path.exists(DB_TEST_PATH):
+        os.remove(DB_TEST_PATH)
+
+
+@pytest.fixture
+def test_app():
+    from app.main import app
+    return app
 
 
 @pytest.mark.asyncio
-async def test_app_starts_and_serves_query():
-    transport = ASGITransport(app=app)
+async def test_app_starts_and_serves_query(test_app):
+    transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/api/query")
     assert resp.status_code == 200
@@ -29,8 +38,8 @@ async def test_app_starts_and_serves_query():
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint():
-    transport = ASGITransport(app=app)
+async def test_health_endpoint(test_app):
+    transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/health")
     assert resp.status_code == 200

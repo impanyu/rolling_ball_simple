@@ -6,7 +6,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
+from app.config import settings as _settings_ref
+import app.config as _config_module
 from app.database import init_db
 from app.routes.query import router as query_router
 
@@ -14,7 +15,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
-_db_initialized = False
+
+
+def _get_settings():
+    """Get current settings (supports test-time reloads)."""
+    return _config_module.settings
 
 
 async def scheduled_fetch():
@@ -26,10 +31,11 @@ async def scheduled_fetch():
         from app.kalshi.fetcher import run_full_pipeline
         from app.stats.sackmann import ensure_repos
 
-        ensure_repos(settings.sackmann_data_dir)
-        auth = KalshiAuth(settings.kalshi_api_key_id, settings.kalshi_private_key_path)
+        s = _get_settings()
+        ensure_repos(s.sackmann_data_dir)
+        auth = KalshiAuth(s.kalshi_api_key_id, s.kalshi_private_key_path)
         client = KalshiClient("https://trading-api.kalshi.com/trade-api/v2", auth)
-        await run_full_pipeline(client, settings.db_path, settings.sackmann_data_dir)
+        await run_full_pipeline(client, s.db_path, s.sackmann_data_dir)
         await client.close()
         logger.info("Scheduled fetch complete.")
     except Exception as e:
@@ -37,23 +43,22 @@ async def scheduled_fetch():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    global _db_initialized
-    await init_db(settings.db_path)
-    _db_initialized = True
+async def lifespan(fastapi_app: FastAPI):
+    s = _get_settings()
+    await init_db(s.db_path)
     logger.info("Database initialized.")
 
-    if settings.kalshi_api_key_id:
+    if s.kalshi_api_key_id:
         scheduler.add_job(
             scheduled_fetch,
             "cron",
-            hour=settings.fetch_cron_hour,
-            minute=settings.fetch_cron_minute,
+            hour=s.fetch_cron_hour,
+            minute=s.fetch_cron_minute,
             id="daily_fetch",
         )
         scheduler.start()
         logger.info(
-            f"Scheduler started: daily fetch at {settings.fetch_cron_hour:02d}:{settings.fetch_cron_minute:02d}"
+            f"Scheduler started: daily fetch at {s.fetch_cron_hour:02d}:{s.fetch_cron_minute:02d}"
         )
     else:
         logger.warning("No Kalshi API key configured. Scheduler not started.")
@@ -79,10 +84,7 @@ app.include_router(query_router)
 @app.middleware("http")
 async def ensure_db_initialized(request: Request, call_next):
     """Ensure DB is initialized before handling requests (fallback for test environments)."""
-    global _db_initialized
-    if not _db_initialized:
-        await init_db(settings.db_path)
-        _db_initialized = True
+    await init_db(_get_settings().db_path)
     return await call_next(request)
 
 
