@@ -78,17 +78,11 @@ class KalshiClient:
             params["status"] = status
         return await self._paginate("GET", "/markets", "markets", params)
 
-    async def get_candlesticks(
+    async def get_trades(
         self,
         ticker: str,
-        period_interval: int = 1,
-        start_ts: int | None = None,
-        end_ts: int | None = None,
     ) -> list[dict[str, Any]]:
-        params: dict[str, Any] = {"period_interval": period_interval}
-        if start_ts:
-            params["start_ts"] = start_ts
-        if end_ts:
-            params["end_ts"] = end_ts
-        data = await self._request("GET", f"/markets/{ticker}/candlesticks", params)
-        return data.get("candlesticks", [])
+        """Fetch all trades for a market (paginated)."""
+        return await self._paginate(
+            "GET", "/markets/trades", "trades", {"ticker": ticker, "limit": 1000}
+        )

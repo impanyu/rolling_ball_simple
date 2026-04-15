@@ -41,10 +41,11 @@ async def test_run_full_pipeline():
         }
     ]
 
-    mock_client.get_candlesticks.return_value = [
-        {"t": 1709290800, "open": 60, "high": 65, "low": 58, "close": 62, "volume": 100},
-        {"t": 1709290860, "open": 62, "high": 70, "low": 60, "close": 55, "volume": 80},
-        {"t": 1709290920, "open": 55, "high": 75, "low": 50, "close": 75, "volume": 120},
+    # Mock trades: 3 trades, each in a different minute
+    mock_client.get_trades.return_value = [
+        {"created_time": "2024-03-01T10:00:30Z", "yes_price_dollars": "0.62", "ticker": "MKT1"},
+        {"created_time": "2024-03-01T10:01:30Z", "yes_price_dollars": "0.55", "ticker": "MKT1"},
+        {"created_time": "2024-03-01T10:02:30Z", "yes_price_dollars": "0.75", "ticker": "MKT1"},
     ]
 
     with patch("app.kalshi.fetcher.get_player_stats_for_match", return_value={}):

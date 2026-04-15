@@ -37,14 +37,15 @@ async def test_get_events(mock_auth):
 
 
 @pytest.mark.asyncio
-async def test_get_candlesticks(mock_auth):
+async def test_get_trades(mock_auth):
     client = KalshiClient("https://api.example.com", mock_auth)
 
     mock_response = MagicMock()
     mock_response.json.return_value = {
-        "candlesticks": [
-            {"t": 1000, "open": 50, "high": 55, "low": 48, "close": 52},
-        ]
+        "trades": [
+            {"yes_price_dollars": "0.52", "created_time": "2024-01-01T00:00:00Z"},
+        ],
+        "cursor": "",
     }
     mock_response.raise_for_status = MagicMock()
 
@@ -52,9 +53,9 @@ async def test_get_candlesticks(mock_auth):
     client._http.request = AsyncMock(return_value=mock_response)
     client._http.is_closed = False
 
-    candles = await client.get_candlesticks("TICKER-1")
-    assert len(candles) == 1
-    assert candles[0]["close"] == 52
+    trades = await client.get_trades("TICKER-1")
+    assert len(trades) == 1
+    assert trades[0]["yes_price_dollars"] == "0.52"
 
 
 @pytest.mark.asyncio

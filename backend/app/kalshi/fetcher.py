@@ -131,13 +131,23 @@ async def run_full_pipeline(client, db_path: str, sackmann_dir: str) -> None:
     for series in TENNIS_SERIES:
         try:
             events = await client.get_events(series_ticker=series)
-            for event in events:
-                markets = await client.get_markets(
-                    event_ticker=event["event_ticker"], status="finalized"
-                )
-                all_markets.extend(markets)
+            logger.info(f"Found {len(events)} events for {series}")
         except Exception as e:
-            logger.warning(f"Failed to fetch series {series}: {e}")
+            logger.warning(f"Failed to fetch events for {series}: {e}")
+            continue
+
+        for event in events:
+            try:
+                # Fetch all markets for this event (don't filter by status in API —
+                # some API versions don't support it), then filter locally
+                markets = await client.get_markets(
+                    event_ticker=event["event_ticker"]
+                )
+                settled = [m for m in markets if m.get("status") in ("finalized", "settled", "closed")]
+                all_markets.extend(settled)
+            except Exception as e:
+                logger.debug(f"Skipping event {event.get('event_ticker')}: {e}")
+                continue
 
     async with get_db(db_path) as db:
         cursor = await db.execute("SELECT DISTINCT match_id FROM raw_prices")
@@ -166,24 +176,39 @@ async def run_full_pipeline(client, db_path: str, sackmann_dir: str) -> None:
         match_date = open_time[:10] if open_time else "unknown"
 
         try:
-            candles = await client.get_candlesticks(ticker)
+            trades = await client.get_trades(ticker)
         except Exception as e:
-            logger.error(f"Failed to fetch candlesticks for {ticker}: {e}")
+            logger.error(f"Failed to fetch trades for {ticker}: {e}")
             continue
 
-        if not candles:
+        if not trades:
+            continue
+
+        # Aggregate trades by minute: take the last trade price per minute
+        trades_sorted = sorted(trades, key=lambda t: t["created_time"])
+        minute_prices: dict[int, tuple[float, str]] = {}
+        first_time = trades_sorted[0]["created_time"]
+        t0 = datetime.fromisoformat(first_time.replace("Z", "+00:00"))
+
+        for trade in trades_sorted:
+            t = datetime.fromisoformat(trade["created_time"].replace("Z", "+00:00"))
+            minute = int((t - t0).total_seconds() / 60)
+            price_dollars = float(trade["yes_price_dollars"])
+            # Convert to cents (0-100 scale)
+            price_cents = price_dollars * 100
+            minute_prices[minute] = (price_cents, trade["created_time"])
+
+        if not minute_prices:
             continue
 
         async with get_db(db_path) as db:
-            for i, candle in enumerate(candles):
-                ts = candle.get("t", 0)
-                price = candle.get("close", candle.get("open", 0))
+            for minute in sorted(minute_prices.keys()):
+                price, ts = minute_prices[minute]
                 await db.execute(
                     "INSERT INTO raw_prices "
                     "(match_id, player, opponent, tournament, match_date, minute, price, timestamp) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (ticker, player, opponent, tournament, match_date, i, price,
-                     datetime.utcfromtimestamp(ts).isoformat() + "Z" if ts else ""),
+                    (ticker, player, opponent, tournament, match_date, minute, price, ts),
                 )
             await db.commit()
 
