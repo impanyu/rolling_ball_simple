@@ -88,6 +88,31 @@ async def test_query_with_ranking_filter(app):
 
 
 @pytest.mark.asyncio
+async def test_current_price_filter_takes_first_entry_only(app):
+    """When filtering by current_price range, only the first minute
+    where the price enters the range should be included per match+player."""
+    # The fixture inserts 20 rows for 4 matches, all same player.
+    # current_price = 30+i (i=0..19), so prices are 30,31,...,49
+    # If we query current_price_min=35&current_price_max=40,
+    # that matches minutes i=5,6,7,8,9,10 (prices 35,36,37,38,39,40)
+    # These span MATCH1 (i=5..9) and MATCH2 (i=10)
+    # MATCH0: i=0..4 (prices 30-34) -> no match
+    # MATCH1: i=5..9 (prices 35-39) -> first entry at i=5, price=35
+    # MATCH2: i=10..14 (prices 40-44) -> first entry at i=10, price=40
+    # MATCH3: i=15..19 (prices 45-49) -> no match
+    # Wait, current_price_max=40, so MATCH2 i=10 (price=40) is included.
+    # So we expect 2 data points: one from MATCH1 (first at i=5) and one from MATCH2 (first at i=10)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/query?current_price_min=35&current_price_max=40")
+    assert resp.status_code == 200
+    data = resp.json()
+    # Without the first-entry constraint, this would return 6 data points
+    # With the constraint, only 2 (first entry per match+player)
+    assert data["total_count"] == 2
+
+
+@pytest.mark.asyncio
 async def test_histogram_bins_are_5_cents(app):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

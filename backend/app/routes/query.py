@@ -25,16 +25,16 @@ async def query_data(
     conditions = []
     params: list = []
 
-    filters = [
+    # Non-current_price filters apply to all rows
+    non_cp_filters = [
         ("initial_price", initial_price_min, initial_price_max),
-        ("current_price", current_price_min, current_price_max),
         ("player_ranking", player_ranking_min, player_ranking_max),
         ("opponent_ranking", opponent_ranking_min, opponent_ranking_max),
         ("player_win_rate_3m", player_win_rate_3m_min, player_win_rate_3m_max),
         ("opponent_win_rate_3m", opponent_win_rate_3m_min, opponent_win_rate_3m_max),
     ]
 
-    for col, min_val, max_val in filters:
+    for col, min_val, max_val in non_cp_filters:
         if min_val is not None:
             conditions.append(f"{col} >= ?")
             params.append(min_val)
@@ -42,14 +42,52 @@ async def query_data(
             conditions.append(f"{col} <= ?")
             params.append(max_val)
 
-    where_clause = ""
-    if conditions:
-        where_clause = "WHERE " + " AND ".join(conditions)
+    # current_price filter: only take the FIRST minute per (match_id, player)
+    # where current_price enters the query range
+    has_cp_filter = current_price_min is not None or current_price_max is not None
 
-    sql = f"SELECT max_price_after FROM extracted_data {where_clause}"
+    cp_conditions = []
+    cp_params: list = []
+    if current_price_min is not None:
+        cp_conditions.append("current_price >= ?")
+        cp_params.append(current_price_min)
+    if current_price_max is not None:
+        cp_conditions.append("current_price <= ?")
+        cp_params.append(current_price_max)
+
+    if has_cp_filter:
+        # Use a CTE to find the first minute each (match_id, player) enters the range,
+        # then join back to get the max_price_after for that specific minute
+        all_conditions = conditions + cp_conditions
+        all_params = params + cp_params
+        where_clause = ""
+        if all_conditions:
+            where_clause = "WHERE " + " AND ".join(all_conditions)
+
+        sql = f"""
+            WITH first_entry AS (
+                SELECT match_id, player, MIN(minute) as first_minute
+                FROM extracted_data
+                {where_clause}
+                GROUP BY match_id, player
+            )
+            SELECT e.max_price_after
+            FROM extracted_data e
+            INNER JOIN first_entry f
+                ON e.match_id = f.match_id
+                AND e.player = f.player
+                AND e.minute = f.first_minute
+        """
+        final_params = all_params
+    else:
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+        sql = f"SELECT max_price_after FROM extracted_data {where_clause}"
+        final_params = params
 
     async with get_db(app.config.settings.db_path) as db:
-        cursor = await db.execute(sql, params)
+        cursor = await db.execute(sql, final_params)
         rows = await cursor.fetchall()
 
     values = [row[0] for row in rows]
