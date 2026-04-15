@@ -39,7 +39,7 @@ def parse_rankings(repo_dir: str, tour: str = "atp") -> pd.DataFrame:
     repo_path = Path(repo_dir)
 
     players_file = repo_path / f"{tour}_players.csv"
-    players = pd.read_csv(players_file, dtype={"player_id": str})
+    players = pd.read_csv(players_file, dtype=str, low_memory=False)
     name_map = {
         row["player_id"]: normalize_name(
             str(row.get("name_first", "")), str(row.get("name_last", ""))
@@ -56,10 +56,10 @@ def parse_rankings(repo_dir: str, tour: str = "atp") -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=["ranking_date", "ranking", "player_name"])
 
-    rankings = pd.concat(frames, ignore_index=True)
-    rankings["player_name"] = rankings["player"].map(name_map)
+    rankings = pd.concat(frames, ignore_index=True).copy()
+    rankings.loc[:, "player_name"] = rankings["player"].map(name_map)
     rankings = rankings.dropna(subset=["player_name"])
-    rankings["ranking_date"] = pd.to_datetime(rankings["ranking_date"], format="%Y%m%d")
+    rankings.loc[:, "ranking_date"] = pd.to_datetime(rankings["ranking_date"], format="%Y%m%d")
     rankings = rankings.rename(columns={"rank": "ranking"})
     return rankings[["ranking_date", "ranking", "player_name"]]
 
@@ -75,8 +75,8 @@ def parse_matches(repo_dir: str, tour: str = "atp") -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=["tourney_date", "winner_name", "loser_name", "tourney_name"])
 
-    matches = pd.concat(frames, ignore_index=True)
-    matches["winner_name"] = matches["winner_name"].str.lower().str.strip()
-    matches["loser_name"] = matches["loser_name"].str.lower().str.strip()
-    matches["tourney_date"] = pd.to_datetime(matches["tourney_date"], format="%Y%m%d")
+    matches = pd.concat(frames, ignore_index=True).copy()
+    matches.loc[:, "winner_name"] = matches["winner_name"].str.lower().str.strip()
+    matches.loc[:, "loser_name"] = matches["loser_name"].str.lower().str.strip()
+    matches.loc[:, "tourney_date"] = pd.to_datetime(matches["tourney_date"], format="%Y%m%d")
     return matches[["tourney_date", "winner_name", "loser_name", "tourney_name"]]
