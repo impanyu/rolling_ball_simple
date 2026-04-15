@@ -34,7 +34,7 @@ async def scheduled_fetch():
         s = _get_settings()
         ensure_repos(s.sackmann_data_dir)
         auth = KalshiAuth(s.kalshi_api_key_id, s.kalshi_private_key_path)
-        client = KalshiClient("https://trading-api.kalshi.com/trade-api/v2", auth)
+        client = KalshiClient("https://api.elections.kalshi.com/trade-api/v2", auth)
         await run_full_pipeline(client, s.db_path, s.sackmann_data_dir)
         await client.close()
         logger.info("Scheduled fetch complete.")

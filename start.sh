@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo "=== Tennis Odds Query Tool ==="
 
 # Start backend
 echo "Starting backend on port 8000..."
-cd "$(dirname "$0")/backend"
+cd "$PROJECT_DIR/backend"
 
 if [ ! -d ".venv" ]; then
     echo "Creating Python virtual environment..."
@@ -21,7 +23,7 @@ BACKEND_PID=$!
 
 # Start frontend
 echo "Starting frontend on port 3000..."
-cd "$(dirname "$0")/frontend"
+cd "$PROJECT_DIR/frontend"
 
 if [ ! -d "node_modules" ]; then
     echo "Installing frontend dependencies..."

@@ -30,7 +30,7 @@ async def main():
     ensure_repos(settings.sackmann_data_dir)
 
     auth = KalshiAuth(settings.kalshi_api_key_id, settings.kalshi_private_key_path)
-    client = KalshiClient("https://trading-api.kalshi.com/trade-api/v2", auth)
+    client = KalshiClient("https://api.elections.kalshi.com/trade-api/v2", auth)
 
     try:
         await run_full_pipeline(client, settings.db_path, settings.sackmann_data_dir)
