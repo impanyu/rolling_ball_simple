@@ -42,6 +42,12 @@ export default function SimulatorPage() {
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const handleLookup = async (input: string) => {
+        // Stop any running auto-update from previous match
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+        setAutoUpdating(false);
         setLoading(true);
         setError(null);
         setSimResult(null);
