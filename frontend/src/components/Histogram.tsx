@@ -86,11 +86,7 @@ export default function Histogram({
                         ]}
                         labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} ${unit}`}
                     />
-                    <Bar
-                        dataKey="percentage"
-                        cursor="pointer"
-                        onClick={(_, index) => handleBarClick(chartData[index])}
-                    >
+                    <Bar dataKey="percentage" cursor="pointer">
                         {chartData.map((entry, index) => (
                             <Cell
                                 key={index}
@@ -99,6 +95,8 @@ export default function Histogram({
                                         ? "#e74c3c"
                                         : "#3498db"
                                 }
+                                onClick={() => handleBarClick(chartData[index])}
+                                cursor="pointer"
                             />
                         ))}
                     </Bar>
