@@ -149,6 +149,147 @@ def _simulate_one_path(
     return max_prob
 
 
+HORIZON_POINTS = [10, 20, 30, 50, 80]
+HORIZON_WEIGHTS = {n: 1.0 / n for n in HORIZON_POINTS}
+
+
+def _build_histogram(values_pct: List[float], n_bins: int = 20, bin_width: float = 5.0) -> list:
+    bins = [0] * n_bins
+    for v in values_pct:
+        idx = int(v // bin_width)
+        if idx >= n_bins:
+            idx = n_bins - 1
+        bins[idx] += 1
+    total = len(values_pct)
+    return [
+        {
+            "bin_start": i * bin_width,
+            "bin_end": (i + 1) * bin_width,
+            "count": bins[i],
+            "percentage": round((bins[i] / total) * 100.0, 2) if total > 0 else 0,
+        }
+        for i in range(n_bins)
+    ]
+
+
+def _compute_stats(values_pct: List[float]) -> dict:
+    if not values_pct:
+        return {"mean": 0, "median": 0, "std": 0}
+    return {
+        "mean": round(statistics.mean(values_pct), 2),
+        "median": round(statistics.median(values_pct), 2),
+        "std": round(statistics.stdev(values_pct), 2) if len(values_pct) > 1 else 0,
+    }
+
+
+def simulate_time_slices(
+    start_state: MatchState,
+    p_a: float,
+    p_b: float,
+    table: Dict[Tuple, float],
+    n_simulations: int = 100_000,
+    horizons: List[int] | None = None,
+) -> dict:
+    """Simulate paths and collect P(A wins) at specific point horizons.
+
+    For each horizon N, record the P(A wins) after N points (or at match end
+    if the match finishes before N points). Returns per-horizon histograms
+    plus a weighted combined histogram (weight = 1/N).
+    """
+    if horizons is None:
+        horizons = HORIZON_POINTS
+
+    rng = random.Random()
+    current_win_prob = win_prob_at_state(start_state, table, p_a, p_b) * 100.0
+    max_horizon = max(horizons)
+
+    # For each horizon, collect endpoint probabilities
+    horizon_values: Dict[int, List[float]] = {h: [] for h in horizons}
+
+    for _ in range(n_simulations):
+        state = start_state
+        for point_idx in range(1, max_horizon + 1):
+            if state.is_terminal():
+                # Match ended — record terminal probability for all remaining horizons
+                terminal_prob = 100.0 if state.sets_a == 2 else 0.0
+                for h in horizons:
+                    if h >= point_idx and len(horizon_values[h]) < _ + 1:
+                        horizon_values[h].append(terminal_prob)
+                break
+
+            if state.is_tiebreak:
+                p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
+            else:
+                p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
+
+            a_wins_point = rng.random() < p_a_point
+            state = next_state(state, a_wins_point)
+
+            if point_idx in horizons:
+                if state.is_terminal():
+                    prob = 100.0 if state.sets_a == 2 else 0.0
+                else:
+                    prob = win_prob_at_state(state, table, p_a, p_b) * 100.0
+                horizon_values[point_idx].append(prob)
+
+        # If match didn't end and we reached max_horizon, fill any horizons
+        # that weren't hit (match still going at that point)
+        for h in horizons:
+            if len(horizon_values[h]) <= _:
+                if state.is_terminal():
+                    prob = 100.0 if state.sets_a == 2 else 0.0
+                else:
+                    prob = win_prob_at_state(state, table, p_a, p_b) * 100.0
+                horizon_values[h].append(prob)
+
+    # Build per-horizon results
+    slices = []
+    for h in horizons:
+        vals = horizon_values[h]
+        slices.append({
+            "horizon": h,
+            "total_count": len(vals),
+            "histogram": _build_histogram(vals),
+            "stats": _compute_stats(vals),
+        })
+
+    # Build weighted combined histogram
+    weight_sum = sum(HORIZON_WEIGHTS.get(h, 1.0 / h) for h in horizons)
+    combined_bins = [0.0] * 20
+    for h in horizons:
+        w = HORIZON_WEIGHTS.get(h, 1.0 / h) / weight_sum
+        hist = _build_histogram(horizon_values[h])
+        for i, b in enumerate(hist):
+            combined_bins[i] += b["percentage"] * w
+
+    combined_histogram = [
+        {
+            "bin_start": i * 5.0,
+            "bin_end": (i + 1) * 5.0,
+            "count": 0,
+            "percentage": round(combined_bins[i], 2),
+        }
+        for i in range(20)
+    ]
+
+    # Weighted stats
+    all_weighted: List[float] = []
+    for h in horizons:
+        w = HORIZON_WEIGHTS.get(h, 1.0 / h) / weight_sum
+        count = int(n_simulations * w)
+        all_weighted.extend(horizon_values[h][:count])
+
+    return {
+        "current_win_prob": round(current_win_prob, 2),
+        "slices": slices,
+        "combined": {
+            "total_count": n_simulations,
+            "histogram": combined_histogram,
+            "stats": _compute_stats(all_weighted) if all_weighted else {"mean": 0, "median": 0, "std": 0},
+        },
+    }
+
+
 def simulate_max_prob_distribution(
     start_state: MatchState,
     p_a: float,

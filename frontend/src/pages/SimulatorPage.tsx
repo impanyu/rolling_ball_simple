@@ -61,7 +61,11 @@ export default function SimulatorPage() {
             setLookup(prev => prev ? { ...prev, current_score: update.current_score, p_a_updated: update.p_a_updated, p_b_updated: update.p_b_updated } : prev);
             setPA(update.p_a_updated);
             setPB(update.p_b_updated);
-            setSimResult({ current_win_prob: update.current_win_prob, total_count: update.total_count, histogram: update.histogram, stats: update.stats });
+            setSimResult({
+                current_win_prob: update.current_win_prob,
+                slices: update.slices,
+                combined: update.combined,
+            });
         } catch { /* silent fail on auto-update */ }
     };
 
@@ -79,9 +83,7 @@ export default function SimulatorPage() {
 
     useEffect(() => { return () => { if (intervalRef.current) clearInterval(intervalRef.current); }; }, []);
 
-    const histogramData: QueryResponse | null = simResult
-        ? { total_count: simResult.total_count, histogram: simResult.histogram, stats: simResult.stats }
-        : null;
+    const playerName = lookup?.player_a ?? "";
 
     return (
         <div>
@@ -98,12 +100,48 @@ export default function SimulatorPage() {
             )}
             <div style={{ marginTop: 16 }}>
                 {simulating && <p style={{ textAlign: "center", color: "#888" }}>Simulating...</p>}
-                <Histogram
-                    data={histogramData}
-                    xLabel="Max Win Probability (%)"
-                    unit="%"
-                    title={lookup ? `Max Win Probability — ${lookup.player_a}` : "Max Win Probability Distribution"}
-                />
+
+                {simResult && (
+                    <>
+                        {/* Per-horizon small histograms */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                            {simResult.slices.map((slice) => {
+                                const sliceData: QueryResponse = {
+                                    total_count: slice.total_count,
+                                    histogram: slice.histogram,
+                                    stats: slice.stats,
+                                };
+                                return (
+                                    <div key={slice.horizon} style={{ minHeight: 300 }}>
+                                        <Histogram
+                                            data={sliceData}
+                                            xLabel="P(win) %"
+                                            unit="%"
+                                            title={`After ${slice.horizon} pts`}
+                                            compact
+                                            currentProb={simResult.current_win_prob}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Weighted combined histogram */}
+                        <div style={{ marginTop: 20 }}>
+                            <Histogram
+                                data={{
+                                    total_count: simResult.combined.total_count,
+                                    histogram: simResult.combined.histogram,
+                                    stats: simResult.combined.stats,
+                                }}
+                                xLabel="P(win) %"
+                                unit="%"
+                                title={`Weighted Combined — ${playerName} (1/N weighting)`}
+                                currentProb={simResult.current_win_prob}
+                            />
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

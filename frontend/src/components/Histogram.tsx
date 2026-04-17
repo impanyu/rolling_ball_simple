@@ -16,9 +16,18 @@ interface Props {
     xLabel?: string;
     unit?: string;
     title?: string;
+    compact?: boolean;
+    currentProb?: number;
 }
 
-export default function Histogram({ data, xLabel = "Max Price After (cents)", unit = "cents", title = "Max Price After Distribution" }: Props) {
+export default function Histogram({
+    data,
+    xLabel = "Max Price After (cents)",
+    unit = "cents",
+    title = "Max Price After Distribution",
+    compact = false,
+    currentProb,
+}: Props) {
     const [selectedBin, setSelectedBin] = useState<HistogramBin | null>(null);
     const [cumulativePercent, setCumulativePercent] = useState<number | null>(null);
 
@@ -47,29 +56,32 @@ export default function Histogram({ data, xLabel = "Max Price After (cents)", un
         setCumulativePercent(Math.round(cumPct * 100) / 100);
     };
 
-    return (
-        <div style={{ padding: 20, border: "1px solid #ddd", borderRadius: 8 }}>
-            <h2 style={{ marginTop: 0 }}>
-                {title} ({data.total_count.toLocaleString()} data points)
-            </h2>
+    const chartHeight = compact ? 200 : 400;
 
-            <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+    return (
+        <div style={{ padding: compact ? 10 : 20, border: "1px solid #ddd", borderRadius: 8 }}>
+            <h3 style={{ marginTop: 0, fontSize: compact ? 14 : 18 }}>
+                {title}
+            </h3>
+
+            <ResponsiveContainer width="100%" height={chartHeight}>
+                <BarChart data={chartData} margin={{ top: 5, right: compact ? 5 : 30, left: compact ? 0 : 20, bottom: compact ? 5 : 25 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                         dataKey="name"
-                        label={{ value: xLabel, position: "insideBottom", offset: -15 }}
+                        tick={{ fontSize: compact ? 9 : 12 }}
+                        label={compact ? undefined : { value: xLabel, position: "insideBottom", offset: -15 }}
                     />
-                    <YAxis
-                        label={{ value: "Percentage (%)", angle: -90, position: "insideLeft" }}
-                    />
-                    <Tooltip
-                        formatter={(value, name) => [
-                            name === "percentage" ? `${value}%` : value,
-                            name === "percentage" ? "Percentage" : "Count",
-                        ]}
-                        labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} ${unit}`}
-                    />
+                    <YAxis tick={{ fontSize: compact ? 9 : 12 }} />
+                    {!compact && (
+                        <Tooltip
+                            formatter={(value, name) => [
+                                name === "percentage" ? `${value}%` : value,
+                                name === "percentage" ? "Percentage" : "Count",
+                            ]}
+                            labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} ${unit}`}
+                        />
+                    )}
                     <Bar
                         dataKey="percentage"
                         cursor="pointer"
@@ -89,7 +101,7 @@ export default function Histogram({ data, xLabel = "Max Price After (cents)", un
                 </BarChart>
             </ResponsiveContainer>
 
-            {selectedBin && cumulativePercent !== null && (
+            {!compact && selectedBin && cumulativePercent !== null && (
                 <div
                     style={{
                         marginTop: 12,
@@ -100,16 +112,20 @@ export default function Histogram({ data, xLabel = "Max Price After (cents)", un
                     }}
                 >
                     <strong>
-                        Cumulative: {cumulativePercent}% of data points have max_price_after
-                        &ge; {selectedBin.bin_start} {unit}
+                        Cumulative: {cumulativePercent}% &ge; {selectedBin.bin_start}{unit}
                     </strong>
                 </div>
             )}
 
-            <div style={{ marginTop: 16, display: "flex", gap: 32 }}>
-                <div><strong>Mean:</strong> {data.stats.mean} {unit}</div>
-                <div><strong>Median:</strong> {data.stats.median} {unit}</div>
-                <div><strong>Std Dev:</strong> {data.stats.std} {unit}</div>
+            <div style={{ marginTop: 8, fontSize: compact ? 12 : 14, display: "flex", gap: compact ? 8 : 32, flexWrap: "wrap" }}>
+                <div><strong>E[P]:</strong> {data.stats.mean}{unit}</div>
+                {currentProb !== undefined && (
+                    <div style={{ color: data.stats.mean - currentProb >= 0 ? "#27ae60" : "#e74c3c" }}>
+                        <strong>&Delta;:</strong> {(data.stats.mean - currentProb) >= 0 ? "+" : ""}{(data.stats.mean - currentProb).toFixed(2)}{unit}
+                    </div>
+                )}
+                {!compact && <div><strong>Median:</strong> {data.stats.median}{unit}</div>}
+                {!compact && <div><strong>Std:</strong> {data.stats.std}{unit}</div>}
             </div>
         </div>
     );

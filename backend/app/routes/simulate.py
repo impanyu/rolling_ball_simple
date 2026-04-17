@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter
 
 from app.tennis.engine import MatchState, build_win_prob_table
-from app.tennis.simulator import simulate_max_prob_distribution, win_prob_at_state
+from app.tennis.simulator import simulate_max_prob_distribution, simulate_time_slices, win_prob_at_state
 from app.tennis.bayesian import bayesian_update_p
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def score_to_match_state(score: ScoreInput) -> MatchState:
 async def simulate(req: SimulateRequest):
     state = score_to_match_state(req.score)
     table = build_win_prob_table(req.p_a, req.p_b)
-    result = simulate_max_prob_distribution(
+    result = simulate_time_slices(
         state, req.p_a, req.p_b, table, req.num_simulations
     )
     return result
@@ -185,7 +185,7 @@ async def match_update(
 
     state = score_to_match_state(ScoreInput(**score))
     table = build_win_prob_table(p_a_updated, p_b_updated)
-    sim_result = simulate_max_prob_distribution(
+    sim_result = simulate_time_slices(
         state, p_a_updated, p_b_updated, table, num_simulations
     )
 

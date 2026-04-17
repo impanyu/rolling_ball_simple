@@ -33,10 +33,12 @@ async def test_simulate_endpoint(app):
         })
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total_count"] == 1000
-    assert len(data["histogram"]) == 20
     assert "current_win_prob" in data
-    assert "stats" in data
+    assert "slices" in data
+    assert len(data["slices"]) == 5  # 5 horizons: 10, 20, 30, 50, 80
+    assert len(data["slices"][0]["histogram"]) == 20
+    assert "combined" in data
+    assert len(data["combined"]["histogram"]) == 20
 
 
 @pytest.mark.asyncio

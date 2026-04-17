@@ -53,16 +53,33 @@ export interface LookupResult {
     error?: string;
 }
 
-export interface SimulateResult {
-    current_win_prob: number;
+export interface TimeSlice {
+    horizon: number;
     total_count: number;
     histogram: HistogramBin[];
     stats: Stats;
 }
 
-export interface MatchUpdateResult extends SimulateResult {
+export interface SimulateResult {
+    current_win_prob: number;
+    slices: TimeSlice[];
+    combined: {
+        total_count: number;
+        histogram: HistogramBin[];
+        stats: Stats;
+    };
+}
+
+export interface MatchUpdateResult {
+    current_win_prob: number;
     current_score: ScoreState;
     p_a_updated: number;
     p_b_updated: number;
+    slices: TimeSlice[];
+    combined: {
+        total_count: number;
+        histogram: HistogramBin[];
+        stats: Stats;
+    };
     error?: string;
 }
