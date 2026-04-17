@@ -10,6 +10,7 @@ from app.config import settings as _settings_ref
 import app.config as _config_module
 from app.database import init_db
 from app.routes.query import router as query_router
+from app.routes.simulate import router as simulate_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,6 +66,9 @@ async def lifespan(fastapi_app: FastAPI):
 
     yield
 
+    from app.scraper.browser import close_browser
+    await close_browser()
+
     if scheduler.running:
         scheduler.shutdown()
 
@@ -79,6 +83,7 @@ app.add_middleware(
 )
 
 app.include_router(query_router)
+app.include_router(simulate_router)
 
 
 @app.middleware("http")
