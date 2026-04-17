@@ -201,22 +201,19 @@ def simulate_max_prob_distribution(
         )
 
     # Descriptive statistics (all in %)
-    sorted_probs = sorted(max_probs_pct)
     mean_val = statistics.mean(max_probs_pct)
     median_val = statistics.median(max_probs_pct)
-    p10_val = sorted_probs[int(0.10 * n_simulations)]
-    p90_val = sorted_probs[min(int(0.90 * n_simulations), n_simulations - 1)]
+    std_val = statistics.stdev(max_probs_pct) if n_simulations > 1 else 0.0
 
     current_win_prob = win_prob_at_state(start_state, table, p_a, p_b) * 100.0
 
     return {
-        "current_win_prob": current_win_prob,
+        "current_win_prob": round(current_win_prob, 2),
         "total_count": n_simulations,
         "histogram": histogram,
         "stats": {
-            "mean": mean_val,
-            "median": median_val,
-            "p10": p10_val,
-            "p90": p90_val,
+            "mean": round(mean_val, 2),
+            "median": round(median_val, 2),
+            "std": round(std_val, 2),
         },
     }

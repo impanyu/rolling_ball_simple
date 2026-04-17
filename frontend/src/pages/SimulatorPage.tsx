@@ -98,7 +98,12 @@ export default function SimulatorPage() {
             )}
             <div style={{ marginTop: 16 }}>
                 {simulating && <p style={{ textAlign: "center", color: "#888" }}>Simulating...</p>}
-                <Histogram data={histogramData} xLabel="Max Win Probability (%)" unit="%" title="Max Win Probability Distribution" />
+                <Histogram
+                    data={histogramData}
+                    xLabel="Max Win Probability (%)"
+                    unit="%"
+                    title={lookup ? `Max Win Probability — ${lookup.player_a}` : "Max Win Probability Distribution"}
+                />
             </div>
         </div>
     );
