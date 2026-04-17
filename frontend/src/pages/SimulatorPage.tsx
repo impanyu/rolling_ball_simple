@@ -132,6 +132,7 @@ export default function SimulatorPage() {
                 <div style={{ marginTop: 16 }}>
                     <MatchStatus lookup={lookup} pA={pA} pB={pB} onPChange={handlePChange}
                         currentWinProb={simResult?.current_win_prob ?? null}
+                        viewPlayer={viewPlayer}
                         autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate} />
                 </div>
             )}

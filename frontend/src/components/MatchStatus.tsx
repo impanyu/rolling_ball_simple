@@ -6,6 +6,7 @@ interface Props {
     pB: number;
     onPChange: (pA: number, pB: number) => void;
     currentWinProb: number | null;
+    viewPlayer: "a" | "b";
     autoUpdating: boolean;
     onToggleAutoUpdate: () => void;
 }
@@ -28,8 +29,12 @@ function formatScore(score: ScoreState, playerA: string, playerB: string): strin
 }
 
 export default function MatchStatus({
-    lookup, pA, pB, onPChange, currentWinProb, autoUpdating, onToggleAutoUpdate
+    lookup, pA, pB, onPChange, currentWinProb, viewPlayer, autoUpdating, onToggleAutoUpdate
 }: Props) {
+    const viewName = viewPlayer === "a" ? lookup.player_a.split(" ").pop() : lookup.player_b.split(" ").pop();
+    const displayProb = currentWinProb !== null
+        ? (viewPlayer === "b" ? 100 - currentWinProb : currentWinProb)
+        : null;
     return (
         <div style={{ padding: 20, border: "1px solid #ddd", borderRadius: 8 }}>
             <h2 style={{ marginTop: 0 }}>
@@ -80,10 +85,10 @@ export default function MatchStatus({
                     ))}
                 </tbody>
             </table>
-            {currentWinProb !== null && (
+            {displayProb !== null && (
                 <p style={{ fontSize: 18, marginTop: 12 }}>
-                    Current P({lookup.player_a.split(" ").pop()} wins):{" "}
-                    <strong>{currentWinProb.toFixed(1)}%</strong>
+                    Current P({viewName} wins):{" "}
+                    <strong>{displayProb.toFixed(1)}%</strong>
                 </p>
             )}
             {lookup.match_found && (
