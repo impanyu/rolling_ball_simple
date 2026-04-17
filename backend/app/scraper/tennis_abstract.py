@@ -11,9 +11,6 @@ SURFACE_LABELS = {"hard": "Hard", "clay": "Clay", "grass": "Grass"}
 
 
 def _parse_stat_block(text: str, label: str) -> dict | None:
-    """Parse a stat block starting with `label` followed by percentage fields.
-    Pattern: 'Label W-L (pct%)...Ace%...1stIn%...1stWon%...2ndWon%...'
-    """
     pattern = (
         re.escape(label)
         + r'\s+\d+-\d+\s*\(\d+%\).*?'
@@ -38,10 +35,6 @@ def _parse_stat_block(text: str, label: str) -> dict | None:
 
 
 def parse_serve_stats_from_text(text: str, surface: str | None = None) -> dict | None:
-    """Parse serve stats from Tennis Abstract page text.
-    If surface is provided ('hard'/'clay'/'grass'), extract surface-specific stats.
-    Otherwise extract 'Last 52' overall stats.
-    """
     if surface and surface.lower() in SURFACE_LABELS:
         label = SURFACE_LABELS[surface.lower()]
         result = _parse_stat_block(text, label)
@@ -52,36 +45,83 @@ def parse_serve_stats_from_text(text: str, surface: str | None = None) -> dict |
     return _parse_stat_block(text, "Last 52")
 
 
+def _generate_name_variants(player_name: str) -> list[str]:
+    """Generate multiple URL name variants to try on Tennis Abstract.
+    E.g. 'Carlos Juan Angelo Prado' -> [
+        'CarlosJuanAngeloPrado',  # full name
+        'CarlosPrado',            # first + last
+        'AngeloPrado',            # last-first-name + last
+        'CJAPrado',               # initials + last
+    ]
+    """
+    parts = player_name.strip().split()
+    if len(parts) <= 1:
+        return [player_name.replace(" ", "")]
+
+    variants = []
+    # Full name (no spaces)
+    variants.append("".join(parts))
+
+    if len(parts) > 2:
+        # First + Last
+        variants.append(parts[0] + parts[-1])
+        # Second-to-last + Last (some players go by middle name)
+        variants.append(parts[-2] + parts[-1])
+
+    return variants
+
+
 async def scrape_player_serve_stats(
     player_name: str, gender: str = "wta", surface: str | None = None
 ) -> dict:
     """Scrape player's serve components from Tennis Abstract.
-    If surface is provided, returns surface-specific stats.
-    Returns dict with first_in, first_won, second_won, p_serve (all as fractions 0-1).
+    Tries multiple name variants if the first attempt fails.
     """
     prefix = "w" if gender == "wta" else ""
-    url_name = player_name.replace(" ", "")
-    url = f"https://www.tennisabstract.com/cgi-bin/{prefix}player-classic.cgi?p={url_name}&f=ACareerqq"
     defaults = DEFAULTS_WTA if gender == "wta" else DEFAULTS_ATP
 
-    try:
-        browser = await get_browser()
-        page = await browser.new_page()
-        await page.goto(url, timeout=15000)
-        await page.wait_for_timeout(3000)
-        text = await page.text_content("body") or ""
-        await page.close()
+    variants = _generate_name_variants(player_name)
 
-        result = parse_serve_stats_from_text(text, surface)
-        if result:
-            surface_label = surface or "overall"
-            logger.info(f"Got serve stats for {player_name} ({surface_label}): fi={result['first_in']}, fw={result['first_won']}, sw={result['second_won']}, p={result['p_serve']}")
-            return result
+    browser = await get_browser()
 
-        logger.warning(f"Could not parse stats for {player_name}, using defaults")
-    except Exception as e:
-        logger.error(f"Failed to scrape {player_name}: {e}")
+    for variant in variants:
+        url = f"https://www.tennisabstract.com/cgi-bin/{prefix}player-classic.cgi?p={variant}&f=ACareerqq"
+        try:
+            page = await browser.new_page()
+            await page.goto(url, timeout=15000)
+            await page.wait_for_timeout(3000)
+            text = await page.text_content("body") or ""
+            await page.close()
 
+            result = parse_serve_stats_from_text(text, surface)
+            if result:
+                surface_label = surface or "overall"
+                logger.info(f"Got serve stats for {player_name} as '{variant}' ({surface_label}): fi={result['first_in']}, fw={result['first_won']}, sw={result['second_won']}, p={result['p_serve']}")
+                return result
+
+        except Exception as e:
+            logger.debug(f"Failed variant '{variant}' for {player_name}: {e}")
+            continue
+
+    # Also try without gender prefix (in case gender was misidentified)
+    alt_prefix = "" if prefix == "w" else "w"
+    for variant in variants[:1]:
+        url = f"https://www.tennisabstract.com/cgi-bin/{alt_prefix}player-classic.cgi?p={variant}&f=ACareerqq"
+        try:
+            page = await browser.new_page()
+            await page.goto(url, timeout=15000)
+            await page.wait_for_timeout(3000)
+            text = await page.text_content("body") or ""
+            await page.close()
+
+            result = parse_serve_stats_from_text(text, surface)
+            if result:
+                logger.info(f"Got serve stats for {player_name} using alt gender prefix")
+                return result
+        except Exception:
+            pass
+
+    logger.warning(f"Could not parse stats for {player_name} (tried {variants}), using defaults")
     p = defaults["first_in"] * defaults["first_won"] + (1 - defaults["first_in"]) * defaults["second_won"]
     return {**defaults, "p_serve": round(p, 4)}
 
