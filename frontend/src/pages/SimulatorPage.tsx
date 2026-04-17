@@ -110,13 +110,19 @@ export default function SimulatorPage() {
                 combined: update.combined,
             });
             setProbHistory(prev => {
-                const tp = typeof update.total_points === "number" ? update.total_points : (prev.length > 0 ? prev[prev.length - 1].points : 0);
-                // Check if this point count already exists anywhere in history
-                const existingIdx = prev.findIndex(pt => pt.points === tp);
-                if (existingIdx >= 0) {
-                    // Update existing entry in place
+                const tp = update.total_points;
+                // Skip if total_points is missing/zero but we already have real data
+                if (!tp && prev.length > 0 && prev[prev.length - 1].points > 0) {
+                    return prev;
+                }
+                // Skip if points went backwards (stale read)
+                if (prev.length > 0 && tp < prev[prev.length - 1].points) {
+                    return prev;
+                }
+                // Same point count as last entry — update in place
+                if (prev.length > 0 && prev[prev.length - 1].points === tp) {
                     const updated = [...prev];
-                    updated[existingIdx] = { points: tp, prob: update.current_win_prob };
+                    updated[updated.length - 1] = { points: tp, prob: update.current_win_prob };
                     return updated;
                 }
                 return [...prev, { points: tp, prob: update.current_win_prob }];
