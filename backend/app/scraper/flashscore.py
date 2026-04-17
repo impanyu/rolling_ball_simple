@@ -210,12 +210,21 @@ def extract_player_names_from_url(url: str) -> tuple[str, str] | None:
     if not match:
         return None
     slug_a, _, slug_b, _ = match.groups()
-    # Convert 'lastname-firstname' to 'Firstname Lastname'
-    parts_a = slug_a.split('-')
-    parts_b = slug_b.split('-')
-    name_a = ' '.join(w.capitalize() for w in reversed(parts_a))
-    name_b = ' '.join(w.capitalize() for w in reversed(parts_b))
+    # URL format: lastname-firstname or lastname-first-middle-etc
+    # First word is last name, rest are first/middle names
+    # Convert 'prado-carlos-juan-angelo' to 'Carlos Juan Angelo Prado'
+    name_a = _slug_to_name(slug_a)
+    name_b = _slug_to_name(slug_b)
     return name_a, name_b
+
+
+def _slug_to_name(slug: str) -> str:
+    parts = slug.split('-')
+    if len(parts) <= 1:
+        return parts[0].capitalize() if parts else ""
+    last_name = parts[0].capitalize()
+    first_names = ' '.join(w.capitalize() for w in parts[1:])
+    return f"{first_names} {last_name}"
 
 
 async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | None, str, str]:
