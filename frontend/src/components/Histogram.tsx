@@ -13,9 +13,12 @@ import type { QueryResponse, HistogramBin } from "../types";
 
 interface Props {
     data: QueryResponse | null;
+    xLabel?: string;
+    unit?: string;
+    title?: string;
 }
 
-export default function Histogram({ data }: Props) {
+export default function Histogram({ data, xLabel = "Max Price After (cents)", unit = "cents", title = "Max Price After Distribution" }: Props) {
     const [selectedBin, setSelectedBin] = useState<HistogramBin | null>(null);
     const [cumulativePercent, setCumulativePercent] = useState<number | null>(null);
 
@@ -47,7 +50,7 @@ export default function Histogram({ data }: Props) {
     return (
         <div style={{ padding: 20, border: "1px solid #ddd", borderRadius: 8 }}>
             <h2 style={{ marginTop: 0 }}>
-                Max Price After Distribution ({data.total_count.toLocaleString()} data points)
+                {title} ({data.total_count.toLocaleString()} data points)
             </h2>
 
             <ResponsiveContainer width="100%" height={400}>
@@ -55,7 +58,7 @@ export default function Histogram({ data }: Props) {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                         dataKey="name"
-                        label={{ value: "Max Price After (cents)", position: "insideBottom", offset: -15 }}
+                        label={{ value: xLabel, position: "insideBottom", offset: -15 }}
                     />
                     <YAxis
                         label={{ value: "Percentage (%)", angle: -90, position: "insideLeft" }}
@@ -65,7 +68,7 @@ export default function Histogram({ data }: Props) {
                             name === "percentage" ? `${value}%` : value,
                             name === "percentage" ? "Percentage" : "Count",
                         ]}
-                        labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} cents`}
+                        labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} ${unit}`}
                     />
                     <Bar
                         dataKey="percentage"
@@ -98,15 +101,15 @@ export default function Histogram({ data }: Props) {
                 >
                     <strong>
                         Cumulative: {cumulativePercent}% of data points have max_price_after
-                        &ge; {selectedBin.bin_start} cents
+                        &ge; {selectedBin.bin_start} {unit}
                     </strong>
                 </div>
             )}
 
             <div style={{ marginTop: 16, display: "flex", gap: 32 }}>
-                <div><strong>Mean:</strong> {data.stats.mean} cents</div>
-                <div><strong>Median:</strong> {data.stats.median} cents</div>
-                <div><strong>Std Dev:</strong> {data.stats.std} cents</div>
+                <div><strong>Mean:</strong> {data.stats.mean} {unit}</div>
+                <div><strong>Median:</strong> {data.stats.median} {unit}</div>
+                <div><strong>Std Dev:</strong> {data.stats.std} {unit}</div>
             </div>
         </div>
     );

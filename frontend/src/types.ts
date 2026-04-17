@@ -31,3 +31,38 @@ export interface QueryFilters {
     opponent_win_rate_3m_min?: number;
     opponent_win_rate_3m_max?: number;
 }
+
+export interface ScoreState {
+    sets: number[];
+    games: number[];
+    points: number[];
+    serving: string;
+}
+
+export interface LookupResult {
+    player_a: string;
+    player_b: string;
+    gender: string;
+    p_a_prior: number;
+    p_b_prior: number;
+    match_found: boolean;
+    match_url: string;
+    current_score: ScoreState;
+    p_a_updated: number;
+    p_b_updated: number;
+    error?: string;
+}
+
+export interface SimulateResult {
+    current_win_prob: number;
+    total_count: number;
+    histogram: HistogramBin[];
+    stats: Stats;
+}
+
+export interface MatchUpdateResult extends SimulateResult {
+    current_score: ScoreState;
+    p_a_updated: number;
+    p_b_updated: number;
+    error?: string;
+}
