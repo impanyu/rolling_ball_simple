@@ -91,7 +91,7 @@ async def lookup_match(req: LookupRequest):
     p_b = await scrape_player_p(player_b, gender)
 
     # Step 3: Search FlashScore for live match
-    from app.scraper.flashscore import search_and_open_match, read_flashscore_pbp, parse_pbp_elements
+    from app.scraper.flashscore import search_and_open_match, read_match_score, read_match_stats
     match_page = await search_and_open_match(player_a, player_b)
 
     match_found = match_page is not None
@@ -102,15 +102,26 @@ async def lookup_match(req: LookupRequest):
 
     if match_page:
         match_url = match_page.url
-        raw_pbp = await read_flashscore_pbp(match_page)
-        parsed_score = parse_pbp_elements(raw_pbp)
-        if parsed_score:
+        score_data = await read_match_score(match_page)
+        if score_data:
             current_score = {
-                "sets": parsed_score["sets"],
-                "games": parsed_score["games"],
-                "points": parsed_score["points"],
-                "serving": parsed_score["serving"],
+                "sets": score_data["sets"],
+                "games": score_data["games"],
+                "points": score_data["points"],
+                "serving": score_data["serving"],
             }
+
+        # Update p values from live match stats
+        stats = await read_match_stats(match_page)
+        if stats:
+            a_won = stats.get("a_serve_won", 0)
+            a_total = stats.get("a_serve_total", 0)
+            b_won = stats.get("b_serve_won", 0)
+            b_total = stats.get("b_serve_total", 0)
+            if a_total > 0:
+                p_a_updated = bayesian_update_p(p_a, a_won, a_total)
+            if b_total > 0:
+                p_b_updated = bayesian_update_p(p_b, b_won, b_total)
 
     return {
         "player_a": player_a,
@@ -134,7 +145,7 @@ async def match_update(
     num_simulations: int = 100_000,
 ):
     from app.scraper.browser import get_browser
-    from app.scraper.flashscore import read_flashscore_pbp, parse_pbp_elements
+    from app.scraper.flashscore import read_match_score, read_match_stats
 
     browser = await get_browser()
     pages = browser.contexts[0].pages if browser.contexts else []
@@ -147,21 +158,30 @@ async def match_update(
     if not match_page:
         return {"error": "Match page not found. Please look up the match again."}
 
-    raw_pbp = await read_flashscore_pbp(match_page)
-    parsed_score = parse_pbp_elements(raw_pbp)
-
-    if not parsed_score:
-        return {"error": "Could not read match data"}
+    score_data = await read_match_score(match_page)
+    if not score_data:
+        return {"error": "Could not read match score"}
 
     score = {
-        "sets": parsed_score["sets"],
-        "games": parsed_score["games"],
-        "points": parsed_score["points"],
-        "serving": parsed_score["serving"],
+        "sets": score_data["sets"],
+        "games": score_data["games"],
+        "points": score_data["points"],
+        "serving": score_data["serving"],
     }
 
     p_a_updated = p_a_prior
     p_b_updated = p_b_prior
+
+    stats = await read_match_stats(match_page)
+    if stats:
+        a_won = stats.get("a_serve_won", 0)
+        a_total = stats.get("a_serve_total", 0)
+        b_won = stats.get("b_serve_won", 0)
+        b_total = stats.get("b_serve_total", 0)
+        if a_total > 0:
+            p_a_updated = bayesian_update_p(p_a_prior, a_won, a_total)
+        if b_total > 0:
+            p_b_updated = bayesian_update_p(p_b_prior, b_won, b_total)
 
     state = score_to_match_state(ScoreInput(**score))
     table = build_win_prob_table(p_a_updated, p_b_updated)

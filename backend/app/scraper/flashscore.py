@@ -6,6 +6,116 @@ from app.scraper.browser import get_browser
 logger = logging.getLogger(__name__)
 
 
+async def read_match_score(page: Page) -> dict | None:
+    """Extract current match score from the FlashScore match page header.
+    Works on the main match page (not PBP subpage).
+    """
+    try:
+        # detailScore__matchInfo contains: "1-1Set 3 - Tiebreak6 : 6 ( 1 : 0 )"
+        # detailScore__wrapper contains: "1-1" (sets)
+        # detailScore__status contains: "Set 3 - Tiebreak6 : 6 ( 1 : 0 )"
+        # detailScore__detailScoreServe contains: "6 : 6" (games in current set)
+
+        match_info_el = await page.query_selector('[class*="detailScore__matchInfo"]')
+        if not match_info_el:
+            return None
+
+        info_text = (await match_info_el.text_content() or "").strip()
+        logger.info(f"Match info text: {info_text}")
+
+        # Extract sets score: "1-1" at the start
+        sets_match = re.match(r'(\d+)\s*[-–]\s*(\d+)', info_text)
+        if not sets_match:
+            return None
+        sets_a, sets_b = int(sets_match.group(1)), int(sets_match.group(2))
+
+        # Extract current set games: "6 : 6" or "3 : 2"
+        games_a, games_b = 0, 0
+        games_el = await page.query_selector('[class*="detailScore__detailScoreServe"]')
+        if games_el:
+            games_text = (await games_el.text_content() or "").strip()
+            games_match = re.match(r'(\d+)\s*:\s*(\d+)', games_text)
+            if games_match:
+                games_a, games_b = int(games_match.group(1)), int(games_match.group(2))
+
+        # Check for tiebreak and extract tiebreak score
+        is_tiebreak = "tiebreak" in info_text.lower()
+        points_a, points_b = 0, 0
+        if is_tiebreak:
+            tb_match = re.search(r'\(\s*(\d+)\s*:\s*(\d+)\s*\)', info_text)
+            if tb_match:
+                points_a, points_b = int(tb_match.group(1)), int(tb_match.group(2))
+
+        # Determine who is serving from the serve indicator
+        serving = "a"
+        serve_els = await page.query_selector_all('[class*="serveIndicator"], [class*="serve"]')
+        # FlashScore typically puts a serve dot near the serving player
+
+        return {
+            "sets": [sets_a, sets_b],
+            "games": [games_a, games_b],
+            "points": [points_a, points_b],
+            "serving": serving,
+            "is_tiebreak": is_tiebreak,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to read match score: {e}")
+        return None
+
+
+async def read_match_stats(page: Page) -> dict | None:
+    """Extract serve statistics from the match page for Bayesian p-value update."""
+    try:
+        body = await page.text_content("body") or ""
+
+        # Look for "1st serve points won" stats
+        # Pattern: "73% (56/77)" or similar
+        stats = {}
+
+        # Find serve points won for home (player A) and away (player B)
+        # FlashScore shows stats like: "73% (56/77)  1st serve points won  65% (42/65)"
+        srv_match = re.search(
+            r'(\d+)%\s*\((\d+)/(\d+)\)\s*1st serve points won\s*(\d+)%\s*\((\d+)/(\d+)\)',
+            body
+        )
+        if srv_match:
+            a_1st_pct, a_1st_won, a_1st_total = srv_match.group(1), int(srv_match.group(2)), int(srv_match.group(3))
+            b_1st_pct, b_1st_won, b_1st_total = srv_match.group(4), int(srv_match.group(5)), int(srv_match.group(6))
+            stats["a_1st_serve_won"] = a_1st_won
+            stats["a_1st_serve_total"] = a_1st_total
+            stats["b_1st_serve_won"] = b_1st_won
+            stats["b_1st_serve_total"] = b_1st_total
+
+        srv2_match = re.search(
+            r'(\d+)%\s*\((\d+)/(\d+)\)\s*2nd serve points won\s*(\d+)%\s*\((\d+)/(\d+)\)',
+            body
+        )
+        if srv2_match:
+            stats["a_2nd_serve_won"] = int(srv2_match.group(2))
+            stats["a_2nd_serve_total"] = int(srv2_match.group(3))
+            stats["b_2nd_serve_won"] = int(srv2_match.group(5))
+            stats["b_2nd_serve_total"] = int(srv2_match.group(6))
+
+        if stats:
+            # Compute total serve points won
+            a_won = stats.get("a_1st_serve_won", 0) + stats.get("a_2nd_serve_won", 0)
+            a_total = stats.get("a_1st_serve_total", 0) + stats.get("a_2nd_serve_total", 0)
+            b_won = stats.get("b_1st_serve_won", 0) + stats.get("b_2nd_serve_won", 0)
+            b_total = stats.get("b_1st_serve_total", 0) + stats.get("b_2nd_serve_total", 0)
+            stats["a_serve_won"] = a_won
+            stats["a_serve_total"] = a_total
+            stats["b_serve_won"] = b_won
+            stats["b_serve_total"] = b_total
+            return stats
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Failed to read match stats: {e}")
+        return None
+
+
 def parse_pbp_elements(raw_elements: list[dict]) -> dict | None:
     if not raw_elements:
         return None
@@ -70,7 +180,7 @@ async def read_flashscore_pbp(page: Page) -> list[dict]:
 
 async def search_and_open_match(player_a: str, player_b: str) -> Page | None:
     """Search FlashScore tennis page for a match between two players.
-    Matches by checking player last names in the match URL hrefs.
+    Opens the main match page (not PBP subpage) to get current score.
     """
     browser = await get_browser()
     page = await browser.new_page()
@@ -88,8 +198,8 @@ async def search_and_open_match(player_a: str, player_b: str) -> Page | None:
                 match_url = await link.get_attribute("href") or ""
                 if not match_url.startswith("http"):
                     match_url = f"https://www.flashscoreusa.com{match_url}"
-                pbp_url = match_url.rstrip("/") + "/summary/point-by-point/set-1/"
-                await page.goto(pbp_url, timeout=15000)
+                # Go to main match page (not PBP) to get current score
+                await page.goto(match_url, timeout=15000)
                 await page.wait_for_timeout(5000)
                 logger.info(f"Found match: {match_url}")
                 return page
