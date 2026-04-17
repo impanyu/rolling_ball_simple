@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Sackmann
     sackmann_data_dir: str = "./data/sackmann"
 
+    # OpenAI
+    openai_api_key: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
