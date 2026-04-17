@@ -36,6 +36,7 @@ export default function WinProbChart({ data, playerName }: Props) {
                         dataKey="points"
                         type="number"
                         domain={["dataMin", "dataMax"]}
+                        allowDecimals={false}
                         label={{ value: "Points played", position: "insideBottom", offset: -15 }}
                     />
                     <YAxis
