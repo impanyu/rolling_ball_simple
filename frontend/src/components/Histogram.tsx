@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     BarChart,
     Bar,
@@ -30,6 +30,12 @@ export default function Histogram({
 }: Props) {
     const [selectedBin, setSelectedBin] = useState<HistogramBin | null>(null);
     const [cumulativePercent, setCumulativePercent] = useState<number | null>(null);
+
+    // Reset selection when data changes
+    useEffect(() => {
+        setSelectedBin(null);
+        setCumulativePercent(null);
+    }, [data]);
 
     if (!data) {
         return <p style={{ textAlign: "center", color: "#888" }}>Run a query to see results.</p>;
@@ -73,15 +79,13 @@ export default function Histogram({
                         label={compact ? undefined : { value: xLabel, position: "insideBottom", offset: -15 }}
                     />
                     <YAxis tick={{ fontSize: compact ? 9 : 12 }} />
-                    {!compact && (
-                        <Tooltip
-                            formatter={(value, name) => [
-                                name === "percentage" ? `${value}%` : value,
-                                name === "percentage" ? "Percentage" : "Count",
-                            ]}
-                            labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} ${unit}`}
-                        />
-                    )}
+                    <Tooltip
+                        formatter={(value, name) => [
+                            name === "percentage" ? `${value}%` : value,
+                            name === "percentage" ? "Percentage" : "Count",
+                        ]}
+                        labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} ${unit}`}
+                    />
                     <Bar
                         dataKey="percentage"
                         cursor="pointer"
