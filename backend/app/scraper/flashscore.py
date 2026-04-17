@@ -69,28 +69,30 @@ async def read_flashscore_pbp(page: Page) -> list[dict]:
 
 
 async def search_and_open_match(player_a: str, player_b: str) -> Page | None:
+    """Search FlashScore tennis page for a match between two players.
+    Matches by checking player last names in the match URL hrefs.
+    """
     browser = await get_browser()
     page = await browser.new_page()
     try:
-        search_query = player_a.split()[-1]
-        url = f"https://www.flashscoreusa.com/search/?q={search_query}"
-        await page.goto(url, timeout=15000)
-        await page.wait_for_timeout(3000)
+        await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
+        await page.wait_for_timeout(4000)
+
+        a_last = player_a.split()[-1].lower()
+        b_last = player_b.split()[-1].lower()
 
         links = await page.query_selector_all('a[href*="/game/tennis/"]')
         for link in links:
-            text = (await link.text_content() or "").lower()
-            a_last = player_a.split()[-1].lower()
-            b_last = player_b.split()[-1].lower()
-            if a_last in text and b_last in text:
-                href = await link.get_attribute("href")
-                if href:
-                    match_url = href if href.startswith("http") else f"https://www.flashscoreusa.com{href}"
-                    pbp_url = match_url.rstrip("/") + "/summary/point-by-point/set-1/"
-                    await page.goto(pbp_url, timeout=15000)
-                    await page.wait_for_timeout(5000)
-                    logger.info(f"Found match: {match_url}")
-                    return page
+            href = (await link.get_attribute("href") or "").lower()
+            if a_last in href and b_last in href:
+                match_url = await link.get_attribute("href") or ""
+                if not match_url.startswith("http"):
+                    match_url = f"https://www.flashscoreusa.com{match_url}"
+                pbp_url = match_url.rstrip("/") + "/summary/point-by-point/set-1/"
+                await page.goto(pbp_url, timeout=15000)
+                await page.wait_for_timeout(5000)
+                logger.info(f"Found match: {match_url}")
+                return page
 
         logger.warning(f"No match found for {player_a} vs {player_b}")
         await page.close()
