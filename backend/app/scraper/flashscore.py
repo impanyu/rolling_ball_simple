@@ -246,10 +246,44 @@ def _slug_to_name(slug: str) -> str:
     return f"{first_names} {last_name}"
 
 
+async def _read_page_player_names(page: Page, url: str) -> tuple[str, str]:
+    """Read actual HOME/AWAY player names from the FlashScore match page.
+    HOME (top) = player_a, AWAY (bottom) = player_b.
+    Falls back to URL-based extraction if page elements not found.
+    """
+    name_els = await page.query_selector_all('[class*="participant__participantName"]')
+    page_names = []
+    for el in name_els:
+        text = (await el.text_content() or "").strip()
+        if text and text not in page_names:
+            page_names.append(text)
+
+    # URL names as fallback
+    url_names = extract_player_names_from_url(url)
+
+    if len(page_names) >= 2:
+        # Page shows abbreviated names like "Soto M." — use URL for full names
+        # but determine which URL player is HOME and which is AWAY
+        if url_names:
+            url_a_last = url_names[0].split()[-1].lower()
+            # Check if URL's first player matches page's HOME (first) player
+            home_last = page_names[0].split()[0].lower().rstrip(".")
+            if url_a_last == home_last:
+                return url_names[0], url_names[1]
+            else:
+                # URL order is reversed from page order — swap
+                return url_names[1], url_names[0]
+
+    # Fallback to URL order
+    if url_names:
+        return url_names[0], url_names[1]
+    return "Player A", "Player B"
+
+
 async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | None, str, str]:
     """Search FlashScore tennis page for a match between two players.
     Opens the main match page (not PBP subpage) to get current score.
-    Returns (page, real_name_a, real_name_b). page is None if not found.
+    Returns (page, home_player, away_player). HOME matches score's left number.
     """
     browser = await get_browser()
     page = await browser.new_page()
@@ -268,14 +302,12 @@ async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | No
                 if not match_url.startswith("http"):
                     match_url = f"https://www.flashscoreusa.com{match_url}"
 
-                # Extract real names from URL
-                names = extract_player_names_from_url(match_url)
-                real_a = names[0] if names else player_a
-                real_b = names[1] if names else player_b
-
                 await page.goto(match_url, timeout=15000)
                 await page.wait_for_timeout(5000)
-                logger.info(f"Found match: {match_url} ({real_a} vs {real_b})")
+
+                # Determine actual HOME/AWAY order from page
+                real_a, real_b = await _read_page_player_names(page, match_url)
+                logger.info(f"Found match: {match_url} (HOME={real_a} vs AWAY={real_b})")
                 return page, real_a, real_b
 
         logger.warning(f"No match found for {player_a} vs {player_b}")
