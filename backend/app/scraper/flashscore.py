@@ -6,6 +6,25 @@ from app.scraper.browser import get_browser
 logger = logging.getLogger(__name__)
 
 
+async def read_player_rankings(page: Page) -> tuple[int | None, int | None]:
+    """Extract player rankings from FlashScore match page.
+    Returns (rank_a, rank_b) or None for each if not found.
+    """
+    try:
+        rank_els = await page.query_selector_all('[class*="participantRank"]')
+        ranks = []
+        for el in rank_els:
+            text = (await el.text_content() or "").strip()
+            match = re.search(r'(\d+)', text)
+            if match:
+                ranks.append(int(match.group(1)))
+        rank_a = ranks[0] if len(ranks) >= 1 else None
+        rank_b = ranks[1] if len(ranks) >= 2 else None
+        return rank_a, rank_b
+    except Exception:
+        return None, None
+
+
 async def read_match_surface(page: Page) -> str | None:
     """Extract surface type from FlashScore match page (e.g. 'clay', 'hard', 'grass')."""
     try:

@@ -34,15 +34,44 @@ def _parse_stat_block(text: str, label: str) -> dict | None:
     }
 
 
-def parse_serve_stats_from_text(text: str, surface: str | None = None) -> dict | None:
+def parse_serve_stats_from_text(
+    text: str, surface: str | None = None, opponent_rank: int | None = None
+) -> dict | None:
+    """Parse serve stats, adjusting for surface and opponent strength.
+    If opponent_rank <= 10, blend with 'vs Top 10' stats.
+    If opponent_rank 11-50, interpolate between 'vs Top 10' and overall.
+    """
+    # Get surface-specific or overall stats
+    base = None
     if surface and surface.lower() in SURFACE_LABELS:
         label = SURFACE_LABELS[surface.lower()]
-        result = _parse_stat_block(text, label)
-        if result:
-            return result
-        logger.warning(f"Could not find {label} surface stats, falling back to Last 52")
+        base = _parse_stat_block(text, label)
+        if not base:
+            logger.warning(f"Could not find {label} surface stats, falling back to Last 52")
 
-    return _parse_stat_block(text, "Last 52")
+    if not base:
+        base = _parse_stat_block(text, "Last 52")
+
+    if not base:
+        return None
+
+    # Adjust for opponent strength if ranking is available
+    if opponent_rank and opponent_rank <= 50:
+        top10_stats = _parse_stat_block(text, "vs Top 10")
+        if top10_stats:
+            if opponent_rank <= 10:
+                weight = 1.0
+            else:
+                weight = (50 - opponent_rank) / 40.0  # linear: rank 10→1.0, rank 50→0.0
+
+            for key in ["first_in", "first_won", "second_won"]:
+                base[key] = round(base[key] * (1 - weight) + top10_stats[key] * weight, 4)
+            base["p_serve"] = round(
+                base["first_in"] * base["first_won"] + (1 - base["first_in"]) * base["second_won"], 4
+            )
+            logger.info(f"Adjusted for opponent rank {opponent_rank} (top10 weight={weight:.2f})")
+
+    return base
 
 
 def _generate_name_variants(player_name: str) -> list[str]:
@@ -72,10 +101,11 @@ def _generate_name_variants(player_name: str) -> list[str]:
 
 
 async def scrape_player_serve_stats(
-    player_name: str, gender: str = "wta", surface: str | None = None
+    player_name: str, gender: str = "wta", surface: str | None = None,
+    opponent_rank: int | None = None,
 ) -> dict:
     """Scrape player's serve components from Tennis Abstract.
-    Tries multiple name variants if the first attempt fails.
+    Adjusts for surface and opponent ranking. Tries multiple name variants.
     """
     prefix = "w" if gender == "wta" else ""
     defaults = DEFAULTS_WTA if gender == "wta" else DEFAULTS_ATP
@@ -93,17 +123,17 @@ async def scrape_player_serve_stats(
             text = await page.text_content("body") or ""
             await page.close()
 
-            result = parse_serve_stats_from_text(text, surface)
+            result = parse_serve_stats_from_text(text, surface, opponent_rank)
             if result:
                 surface_label = surface or "overall"
-                logger.info(f"Got serve stats for {player_name} as '{variant}' ({surface_label}): fi={result['first_in']}, fw={result['first_won']}, sw={result['second_won']}, p={result['p_serve']}")
+                logger.info(f"Got serve stats for {player_name} as '{variant}' ({surface_label}, vs rank {opponent_rank}): fi={result['first_in']}, fw={result['first_won']}, sw={result['second_won']}, p={result['p_serve']}")
                 return result
 
         except Exception as e:
             logger.debug(f"Failed variant '{variant}' for {player_name}: {e}")
             continue
 
-    # Also try without gender prefix (in case gender was misidentified)
+    # Also try without gender prefix
     alt_prefix = "" if prefix == "w" else "w"
     for variant in variants[:1]:
         url = f"https://www.tennisabstract.com/cgi-bin/{alt_prefix}player-classic.cgi?p={variant}&f=ACareerqq"
@@ -114,7 +144,7 @@ async def scrape_player_serve_stats(
             text = await page.text_content("body") or ""
             await page.close()
 
-            result = parse_serve_stats_from_text(text, surface)
+            result = parse_serve_stats_from_text(text, surface, opponent_rank)
             if result:
                 logger.info(f"Got serve stats for {player_name} using alt gender prefix")
                 return result
