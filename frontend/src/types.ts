@@ -44,12 +44,14 @@ export interface ServeComponents {
     first_won: number;
     second_won: number;
     p_serve: number;
+    is_default?: boolean;
 }
 
 export interface LookupResult {
     player_a: string;
     player_b: string;
     gender: string;
+    surface: string | null;
     p_a_prior: number;
     p_b_prior: number;
     serve_a_prior: ServeComponents;

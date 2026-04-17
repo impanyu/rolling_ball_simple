@@ -3,7 +3,7 @@ import MatchInput from "../components/MatchInput";
 import MatchStatus from "../components/MatchStatus";
 import Histogram from "../components/Histogram";
 import WinProbChart from "../components/WinProbChart";
-import { lookupMatch, runSimulation, fetchMatchUpdate } from "../api";
+import { lookupMatch, runSimulation, fetchMatchUpdate, rescrapePlayer } from "../api";
 import type { LookupResult, SimulateResult, QueryResponse, HistogramBin } from "../types";
 
 function flipHistogram(histogram: HistogramBin[]): HistogramBin[] {
@@ -39,6 +39,9 @@ export default function SimulatorPage() {
     const [autoUpdating, setAutoUpdating] = useState(false);
     const [viewPlayer, setViewPlayer] = useState<"a" | "b">("a");
     const [probHistory, setProbHistory] = useState<ProbPoint[]>([]);
+    const [urlA, setUrlA] = useState("");
+    const [urlB, setUrlB] = useState("");
+    const [rescraping, setRescraping] = useState(false);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const handleLookup = async (input: string) => {
@@ -161,6 +164,85 @@ export default function SimulatorPage() {
                         currentWinProb={simResult?.current_win_prob ?? null}
                         viewPlayer={viewPlayer}
                         autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate} />
+                </div>
+            )}
+
+            {/* Missing player URL prompt */}
+            {lookup && (lookup.serve_a_prior?.is_default || lookup.serve_b_prior?.is_default) && (
+                <div style={{ marginTop: 16, padding: 16, border: "1px solid #f0ad4e", borderRadius: 8, background: "#fef9e7" }}>
+                    <p style={{ margin: 0, fontWeight: 600, color: "#856404" }}>
+                        Could not find serve stats on Tennis Abstract for:
+                    </p>
+                    {lookup.serve_a_prior?.is_default && (
+                        <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+                            <label style={{ minWidth: 120 }}>{lookup.player_a}:</label>
+                            <input
+                                type="text"
+                                value={urlA}
+                                onChange={(e) => setUrlA(e.target.value)}
+                                placeholder="Paste Tennis Abstract URL"
+                                style={{ flex: 1, padding: "6px 10px" }}
+                            />
+                        </div>
+                    )}
+                    {lookup.serve_b_prior?.is_default && (
+                        <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+                            <label style={{ minWidth: 120 }}>{lookup.player_b}:</label>
+                            <input
+                                type="text"
+                                value={urlB}
+                                onChange={(e) => setUrlB(e.target.value)}
+                                placeholder="Paste Tennis Abstract URL"
+                                style={{ flex: 1, padding: "6px 10px" }}
+                            />
+                        </div>
+                    )}
+                    <button
+                        disabled={rescraping || (!urlA && !urlB)}
+                        onClick={async () => {
+                            setRescraping(true);
+                            try {
+                                if (urlA && lookup.serve_a_prior?.is_default) {
+                                    const res = await rescrapePlayer(urlA, "a", lookup.surface ?? undefined);
+                                    if (!res.error && res.serve_stats) {
+                                        setLookup(prev => prev ? {
+                                            ...prev,
+                                            serve_a_prior: { ...res.serve_stats, is_default: undefined },
+                                            serve_a_updated: { ...res.serve_stats, is_default: undefined },
+                                            p_a_prior: res.serve_stats.p_serve,
+                                            p_a_updated: res.serve_stats.p_serve,
+                                        } : prev);
+                                        setPA(res.serve_stats.p_serve);
+                                    }
+                                }
+                                if (urlB && lookup.serve_b_prior?.is_default) {
+                                    const res = await rescrapePlayer(urlB, "b", lookup.surface ?? undefined);
+                                    if (!res.error && res.serve_stats) {
+                                        setLookup(prev => prev ? {
+                                            ...prev,
+                                            serve_b_prior: { ...res.serve_stats, is_default: undefined },
+                                            serve_b_updated: { ...res.serve_stats, is_default: undefined },
+                                            p_b_prior: res.serve_stats.p_serve,
+                                            p_b_updated: res.serve_stats.p_serve,
+                                        } : prev);
+                                        setPB(res.serve_stats.p_serve);
+                                    }
+                                }
+                                // Re-run simulation with new p values
+                                if (lookup) {
+                                    const sim = await runSimulation(pA, pB, lookup.current_score, 100000);
+                                    setSimResult(sim);
+                                }
+                            } catch (err) {
+                                setError(err instanceof Error ? err.message : "Rescrape failed");
+                            } finally {
+                                setRescraping(false);
+                            }
+                        }}
+                        style={{ marginTop: 12, padding: "6px 16px", cursor: rescraping ? "not-allowed" : "pointer" }}
+                    >
+                        {rescraping ? "Fetching..." : "Fetch Stats"}
+                    </button>
                 </div>
             )}
 

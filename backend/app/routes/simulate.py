@@ -242,3 +242,20 @@ async def match_update(
         "serve_b_updated": serve_b_updated,
         **sim_result,
     }
+
+
+class RescrapeRequest(BaseModel):
+    url: str
+    player: str  # "a" or "b"
+    surface: str | None = None
+    opponent_rank: int | None = None
+
+
+@router.post("/api/rescrape-player")
+async def rescrape_player(req: RescrapeRequest):
+    """Scrape serve stats from a user-provided Tennis Abstract URL."""
+    from app.scraper.tennis_abstract import scrape_from_url
+    result = await scrape_from_url(req.url, req.surface, req.opponent_rank)
+    if not result:
+        return {"error": f"Could not extract serve stats from {req.url}"}
+    return {"player": req.player, "serve_stats": result}

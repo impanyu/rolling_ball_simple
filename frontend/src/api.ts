@@ -40,6 +40,18 @@ export async function runSimulation(
 
 import type { ServeComponents } from "./types";
 
+export async function rescrapePlayer(
+    url: string, player: "a" | "b", surface?: string, opponentRank?: number
+): Promise<{ player: string; serve_stats: ServeComponents; error?: string }> {
+    const resp = await fetch("/api/rescrape-player", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, player, surface: surface || null, opponent_rank: opponentRank || null }),
+    });
+    if (!resp.ok) throw new Error(`Rescrape failed: ${resp.status}`);
+    return resp.json();
+}
+
 export async function fetchMatchUpdate(
     matchUrl: string,
     serveA: ServeComponents,

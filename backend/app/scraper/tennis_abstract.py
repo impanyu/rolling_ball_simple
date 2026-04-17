@@ -153,7 +153,29 @@ async def scrape_player_serve_stats(
 
     logger.warning(f"Could not parse stats for {player_name} (tried {variants}), using defaults")
     p = defaults["first_in"] * defaults["first_won"] + (1 - defaults["first_in"]) * defaults["second_won"]
-    return {**defaults, "p_serve": round(p, 4)}
+    return {**defaults, "p_serve": round(p, 4), "is_default": True}
+
+
+async def scrape_from_url(
+    url: str, surface: str | None = None, opponent_rank: int | None = None
+) -> dict | None:
+    """Scrape serve stats from a user-provided Tennis Abstract URL."""
+    try:
+        browser = await get_browser()
+        page = await browser.new_page()
+        await page.goto(url, timeout=15000)
+        await page.wait_for_timeout(3000)
+        text = await page.text_content("body") or ""
+        await page.close()
+
+        result = parse_serve_stats_from_text(text, surface, opponent_rank)
+        if result:
+            result["is_default"] = False
+            logger.info(f"Got serve stats from user URL {url}: p={result['p_serve']}")
+            return result
+    except Exception as e:
+        logger.error(f"Failed to scrape user URL {url}: {e}")
+    return None
 
 
 async def scrape_player_p(player_name: str, gender: str = "wta") -> float:
