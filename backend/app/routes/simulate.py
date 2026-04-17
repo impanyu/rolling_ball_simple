@@ -154,6 +154,10 @@ async def lookup_match(req: LookupRequest):
             serve_a_updated = _update_p_from_stats(serve_a, stats, "a")
             serve_b_updated = _update_p_from_stats(serve_b, stats, "b")
 
+    total_points = 0
+    if match_page and stats:
+        total_points = stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0)
+
     return {
         "player_a": player_a,
         "player_b": player_b,
@@ -168,6 +172,7 @@ async def lookup_match(req: LookupRequest):
         "match_found": match_found,
         "match_url": match_url,
         "current_score": current_score,
+        "total_points": total_points,
         "p_a_updated": serve_a_updated["p_serve"],
         "p_b_updated": serve_b_updated["p_serve"],
     }
@@ -222,8 +227,13 @@ async def match_update(
     table = build_win_prob_table(p_a, p_b)
     sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
 
+    total_points = 0
+    if stats:
+        total_points = stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0)
+
     return {
         "current_score": score,
+        "total_points": total_points,
         "p_a_updated": round(p_a, 4),
         "p_b_updated": round(p_b, 4),
         "serve_a_updated": serve_a_updated,

@@ -59,6 +59,7 @@ export interface LookupResult {
     match_found: boolean;
     match_url: string;
     current_score: ScoreState;
+    total_points: number;
     p_a_updated: number;
     p_b_updated: number;
     error?: string;
@@ -84,6 +85,7 @@ export interface SimulateResult {
 export interface MatchUpdateResult {
     current_win_prob: number;
     current_score: ScoreState;
+    total_points: number;
     p_a_updated: number;
     p_b_updated: number;
     slices: TimeSlice[];

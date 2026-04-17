@@ -24,7 +24,7 @@ function flipStats(stats: { mean: number; median: number; std: number }): { mean
 }
 
 interface ProbPoint {
-    tick: number;
+    points: number;
     prob: number;
 }
 
@@ -40,14 +40,12 @@ export default function SimulatorPage() {
     const [viewPlayer, setViewPlayer] = useState<"a" | "b">("a");
     const [probHistory, setProbHistory] = useState<ProbPoint[]>([]);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const tickRef = useRef(0);
 
     const handleLookup = async (input: string) => {
         setLoading(true);
         setError(null);
         setSimResult(null);
         setProbHistory([]);
-        tickRef.current = 0;
         try {
             const result = await lookupMatch(input);
             if (result.error) { setError(result.error); return; }
@@ -57,9 +55,7 @@ export default function SimulatorPage() {
             setSimulating(true);
             const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, 100000);
             setSimResult(sim);
-            // Record initial point
-            tickRef.current = 1;
-            setProbHistory([{ tick: 1, prob: sim.current_win_prob }]);
+            setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob }]);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Lookup failed");
         } finally {
@@ -104,9 +100,13 @@ export default function SimulatorPage() {
                 slices: update.slices,
                 combined: update.combined,
             });
-            // Append to history
-            tickRef.current += 1;
-            setProbHistory(prev => [...prev, { tick: tickRef.current, prob: update.current_win_prob }]);
+            setProbHistory(prev => {
+                const tp = update.total_points || (prev.length > 0 ? prev[prev.length - 1].points + 1 : 0);
+                if (prev.length > 0 && prev[prev.length - 1].points === tp) {
+                    return prev; // same point count, skip duplicate
+                }
+                return [...prev, { points: tp, prob: update.current_win_prob }];
+            });
         } catch { /* silent fail on auto-update */ }
     };
 
@@ -130,9 +130,8 @@ export default function SimulatorPage() {
         ? (isFlipped ? 100 - simResult.current_win_prob : simResult.current_win_prob)
         : null;
 
-    // Flip history for player B view
-    const viewHistory: ProbPoint[] = probHistory.map(pt => ({
-        tick: pt.tick,
+    const viewHistory = probHistory.map(pt => ({
+        points: pt.points,
         prob: isFlipped ? 100 - pt.prob : pt.prob,
     }));
 

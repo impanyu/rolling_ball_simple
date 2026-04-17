@@ -10,7 +10,7 @@ import {
 } from "recharts";
 
 interface DataPoint {
-    tick: number;
+    points: number;
     prob: number;
 }
 
@@ -33,8 +33,10 @@ export default function WinProbChart({ data, playerName }: Props) {
                 <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
-                        dataKey="tick"
-                        label={{ value: "Update #", position: "insideBottom", offset: -15 }}
+                        dataKey="points"
+                        type="number"
+                        domain={["dataMin", "dataMax"]}
+                        label={{ value: "Points played", position: "insideBottom", offset: -15 }}
                     />
                     <YAxis
                         domain={[0, 100]}
@@ -42,7 +44,7 @@ export default function WinProbChart({ data, playerName }: Props) {
                     />
                     <Tooltip
                         formatter={(value) => [`${Number(value).toFixed(1)}%`, "P(win)"]}
-                        labelFormatter={(label) => `Update #${label}`}
+                        labelFormatter={(label) => `Point ${label}`}
                     />
                     <ReferenceLine y={50} stroke="#999" strokeDasharray="3 3" />
                     <Line
