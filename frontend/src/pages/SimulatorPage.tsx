@@ -3,7 +3,24 @@ import MatchInput from "../components/MatchInput";
 import MatchStatus from "../components/MatchStatus";
 import Histogram from "../components/Histogram";
 import { lookupMatch, runSimulation, fetchMatchUpdate } from "../api";
-import type { LookupResult, SimulateResult, QueryResponse } from "../types";
+import type { LookupResult, SimulateResult, QueryResponse, HistogramBin } from "../types";
+
+function flipHistogram(histogram: HistogramBin[]): HistogramBin[] {
+    const flipped = histogram.map((bin) => ({
+        ...bin,
+        bin_start: 100 - bin.bin_end,
+        bin_end: 100 - bin.bin_start,
+    }));
+    return flipped.reverse();
+}
+
+function flipStats(stats: { mean: number; median: number; std: number }): { mean: number; median: number; std: number } {
+    return {
+        mean: Math.round((100 - stats.mean) * 100) / 100,
+        median: Math.round((100 - stats.median) * 100) / 100,
+        std: stats.std,
+    };
+}
 
 export default function SimulatorPage() {
     const [lookup, setLookup] = useState<LookupResult | null>(null);
@@ -14,6 +31,7 @@ export default function SimulatorPage() {
     const [pA, setPA] = useState(0.64);
     const [pB, setPB] = useState(0.64);
     const [autoUpdating, setAutoUpdating] = useState(false);
+    const [viewPlayer, setViewPlayer] = useState<"a" | "b">("a");
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const handleLookup = async (input: string) => {
@@ -90,7 +108,19 @@ export default function SimulatorPage() {
 
     useEffect(() => { return () => { if (intervalRef.current) clearInterval(intervalRef.current); }; }, []);
 
-    const playerName = lookup?.player_a ?? "";
+    const isFlipped = viewPlayer === "b";
+    const viewName = lookup ? (isFlipped ? lookup.player_b : lookup.player_a) : "";
+    const currentProb = simResult
+        ? (isFlipped ? 100 - simResult.current_win_prob : simResult.current_win_prob)
+        : null;
+
+    function toViewData(histogram: HistogramBin[], stats: { mean: number; median: number; std: number }, count: number): QueryResponse {
+        return {
+            total_count: count,
+            histogram: isFlipped ? flipHistogram(histogram) : histogram,
+            stats: isFlipped ? flipStats(stats) : stats,
+        };
+    }
 
     return (
         <div>
@@ -105,6 +135,34 @@ export default function SimulatorPage() {
                         autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate} />
                 </div>
             )}
+
+            {/* Player perspective selector */}
+            {lookup && (
+                <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontWeight: 600 }}>View perspective:</span>
+                    <button
+                        onClick={() => setViewPlayer("a")}
+                        style={{
+                            padding: "6px 16px", border: "1px solid #3498db", borderRadius: 4, cursor: "pointer",
+                            background: viewPlayer === "a" ? "#3498db" : "white",
+                            color: viewPlayer === "a" ? "white" : "#3498db",
+                        }}
+                    >
+                        {lookup.player_a.split(" ").pop()}
+                    </button>
+                    <button
+                        onClick={() => setViewPlayer("b")}
+                        style={{
+                            padding: "6px 16px", border: "1px solid #e74c3c", borderRadius: 4, cursor: "pointer",
+                            background: viewPlayer === "b" ? "#e74c3c" : "white",
+                            color: viewPlayer === "b" ? "white" : "#e74c3c",
+                        }}
+                    >
+                        {lookup.player_b.split(" ").pop()}
+                    </button>
+                </div>
+            )}
+
             <div style={{ marginTop: 16 }}>
                 {simulating && <p style={{ textAlign: "center", color: "#888" }}>Simulating...</p>}
 
@@ -112,39 +170,28 @@ export default function SimulatorPage() {
                     <>
                         {/* Per-horizon small histograms */}
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                            {simResult.slices.map((slice) => {
-                                const sliceData: QueryResponse = {
-                                    total_count: slice.total_count,
-                                    histogram: slice.histogram,
-                                    stats: slice.stats,
-                                };
-                                return (
-                                    <div key={slice.horizon} style={{ minHeight: 300 }}>
-                                        <Histogram
-                                            data={sliceData}
-                                            xLabel="P(win) %"
-                                            unit="%"
-                                            title={`After ${slice.horizon} pts`}
-                                            compact
-                                            currentProb={simResult.current_win_prob}
-                                        />
-                                    </div>
-                                );
-                            })}
+                            {simResult.slices.map((slice) => (
+                                <div key={slice.horizon} style={{ minHeight: 300 }}>
+                                    <Histogram
+                                        data={toViewData(slice.histogram, slice.stats, slice.total_count)}
+                                        xLabel="P(win) %"
+                                        unit="%"
+                                        title={`After ${slice.horizon} pts`}
+                                        compact
+                                        currentProb={currentProb ?? undefined}
+                                    />
+                                </div>
+                            ))}
                         </div>
 
                         {/* Weighted combined histogram */}
                         <div style={{ marginTop: 20 }}>
                             <Histogram
-                                data={{
-                                    total_count: simResult.combined.total_count,
-                                    histogram: simResult.combined.histogram,
-                                    stats: simResult.combined.stats,
-                                }}
+                                data={toViewData(simResult.combined.histogram, simResult.combined.stats, simResult.combined.total_count)}
                                 xLabel="P(win) %"
                                 unit="%"
-                                title={`Weighted Combined — ${playerName} (1/N weighting)`}
-                                currentProb={simResult.current_win_prob}
+                                title={`Weighted Combined — ${viewName} (1/N weighting)`}
+                                currentProb={currentProb ?? undefined}
                             />
                         </div>
                     </>

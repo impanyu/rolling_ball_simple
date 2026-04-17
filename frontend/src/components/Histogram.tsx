@@ -101,23 +101,24 @@ export default function Histogram({
                 </BarChart>
             </ResponsiveContainer>
 
-            {!compact && selectedBin && cumulativePercent !== null && (
+            {selectedBin && cumulativePercent !== null && (
                 <div
                     style={{
-                        marginTop: 12,
-                        padding: 12,
+                        marginTop: compact ? 4 : 12,
+                        padding: compact ? 6 : 12,
                         background: "#fef3f3",
                         borderRadius: 6,
                         border: "1px solid #e74c3c",
+                        fontSize: compact ? 12 : 14,
                     }}
                 >
                     <strong>
-                        Cumulative: {cumulativePercent}% &ge; {selectedBin.bin_start}{unit}
+                        P(&ge;{selectedBin.bin_start}{unit}) = {cumulativePercent}%
                     </strong>
                 </div>
             )}
 
-            <div style={{ marginTop: 8, fontSize: compact ? 12 : 14, display: "flex", gap: compact ? 8 : 32, flexWrap: "wrap" }}>
+            <div style={{ marginTop: 8, fontSize: compact ? 11 : 14, display: "flex", gap: compact ? 8 : 32, flexWrap: "wrap" }}>
                 <div><strong>E[P]:</strong> {data.stats.mean}{unit}</div>
                 {currentProb !== undefined && (
                     <div style={{ color: data.stats.mean - currentProb >= 0 ? "#27ae60" : "#e74c3c" }}>
