@@ -160,6 +160,13 @@ async def scrape_from_url(
     url: str, surface: str | None = None, opponent_rank: int | None = None
 ) -> dict | None:
     """Scrape serve stats from a user-provided Tennis Abstract URL."""
+    # Convert non-classic URLs to classic format (our parser needs it)
+    if "player.cgi" in url and "player-classic.cgi" not in url:
+        url = url.replace("player.cgi", "player-classic.cgi")
+    # Ensure the career stats filter is applied
+    if "f=" not in url:
+        url += "&f=ACareerqq" if "?" in url else "?f=ACareerqq"
+
     try:
         browser = await get_browser()
         page = await browser.new_page()
