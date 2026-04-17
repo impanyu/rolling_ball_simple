@@ -8,8 +8,9 @@ import {
     Tooltip,
     ResponsiveContainer,
     Cell,
+    ReferenceLine,
 } from "recharts";
-import type { QueryResponse, HistogramBin } from "../types";
+import type { QueryResponse } from "../types";
 
 interface Props {
     data: QueryResponse | null;
@@ -28,12 +29,11 @@ export default function Histogram({
     compact = false,
     currentProb,
 }: Props) {
-    const [selectedBin, setSelectedBin] = useState<HistogramBin | null>(null);
+    const [selectedBinStart, setSelectedBinStart] = useState<number | null>(null);
     const [cumulativePercent, setCumulativePercent] = useState<number | null>(null);
 
-    // Reset selection when data changes
     useEffect(() => {
-        setSelectedBin(null);
+        setSelectedBinStart(null);
         setCumulativePercent(null);
     }, [data]);
 
@@ -53,9 +53,10 @@ export default function Histogram({
         bin_end: bin.bin_end,
     }));
 
-    const handleBarClick = (entry: any) => {
-        const clickedStart = entry.bin_start;
-        setSelectedBin(entry);
+    const handleChartClick = (state: any) => {
+        if (!state || !state.activeLabel) return;
+        const clickedStart = Number(state.activeLabel);
+        setSelectedBinStart(clickedStart);
         const cumPct = data.histogram
             .filter((b) => b.bin_start >= clickedStart)
             .reduce((sum, b) => sum + b.percentage, 0);
@@ -64,6 +65,11 @@ export default function Histogram({
 
     const chartHeight = compact ? 200 : 400;
 
+    // Find the bin index where currentProb falls for the reference line
+    const currentProbLabel = currentProb !== undefined
+        ? String(Math.floor(currentProb / 5) * 5)
+        : undefined;
+
     return (
         <div style={{ padding: compact ? 10 : 20, border: "1px solid #ddd", borderRadius: 8 }}>
             <h3 style={{ marginTop: 0, fontSize: compact ? 14 : 18 }}>
@@ -71,7 +77,12 @@ export default function Histogram({
             </h3>
 
             <ResponsiveContainer width="100%" height={chartHeight}>
-                <BarChart data={chartData} margin={{ top: 5, right: compact ? 5 : 30, left: compact ? 0 : 20, bottom: compact ? 5 : 25 }}>
+                <BarChart
+                    data={chartData}
+                    margin={{ top: 5, right: compact ? 5 : 30, left: compact ? 0 : 20, bottom: compact ? 5 : 25 }}
+                    onClick={handleChartClick}
+                    style={{ cursor: "pointer" }}
+                >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                         dataKey="name"
@@ -86,24 +97,31 @@ export default function Histogram({
                         ]}
                         labelFormatter={(label) => `Bin: ${label}-${Number(label) + 5} ${unit}`}
                     />
-                    <Bar dataKey="percentage" cursor="pointer">
+                    {currentProbLabel && (
+                        <ReferenceLine
+                            x={currentProbLabel}
+                            stroke="#e67e22"
+                            strokeWidth={2}
+                            strokeDasharray="4 4"
+                            label={compact ? undefined : { value: `Now: ${currentProb?.toFixed(1)}%`, position: "top", fontSize: 11, fill: "#e67e22" }}
+                        />
+                    )}
+                    <Bar dataKey="percentage">
                         {chartData.map((entry, index) => (
                             <Cell
                                 key={index}
                                 fill={
-                                    selectedBin && entry.bin_start >= selectedBin.bin_start
+                                    selectedBinStart !== null && entry.bin_start >= selectedBinStart
                                         ? "#e74c3c"
                                         : "#3498db"
                                 }
-                                onClick={() => handleBarClick(chartData[index])}
-                                cursor="pointer"
                             />
                         ))}
                     </Bar>
                 </BarChart>
             </ResponsiveContainer>
 
-            {selectedBin && cumulativePercent !== null && (
+            {selectedBinStart !== null && cumulativePercent !== null && (
                 <div
                     style={{
                         marginTop: compact ? 4 : 12,
@@ -115,7 +133,7 @@ export default function Histogram({
                     }}
                 >
                     <strong>
-                        P(&ge;{selectedBin.bin_start}{unit}) = {cumulativePercent}%
+                        P(&ge;{selectedBinStart}{unit}) = {cumulativePercent}%
                     </strong>
                 </div>
             )}

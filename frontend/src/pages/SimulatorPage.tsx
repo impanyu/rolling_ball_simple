@@ -110,11 +110,13 @@ export default function SimulatorPage() {
                 combined: update.combined,
             });
             setProbHistory(prev => {
-                const tp = update.total_points || (prev.length > 0 ? prev[prev.length - 1].points : 0);
-                if (prev.length > 0 && prev[prev.length - 1].points === tp) {
-                    // Same point count — update probability in place
+                const tp = typeof update.total_points === "number" ? update.total_points : (prev.length > 0 ? prev[prev.length - 1].points : 0);
+                // Check if this point count already exists anywhere in history
+                const existingIdx = prev.findIndex(pt => pt.points === tp);
+                if (existingIdx >= 0) {
+                    // Update existing entry in place
                     const updated = [...prev];
-                    updated[updated.length - 1] = { points: tp, prob: update.current_win_prob };
+                    updated[existingIdx] = { points: tp, prob: update.current_win_prob };
                     return updated;
                 }
                 return [...prev, { points: tp, prob: update.current_win_prob }];
