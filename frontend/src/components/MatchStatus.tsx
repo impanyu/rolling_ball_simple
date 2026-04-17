@@ -17,9 +17,12 @@ function formatScore(score: ScoreState, playerA: string, playerB: string): strin
     const games = score.games.join("-");
     const pa = score.points[0];
     const pb = score.points[1];
-    const points = pa <= 4 && pb <= 4
-        ? `${POINT_LABELS[pa] || pa}-${POINT_LABELS[pb] || pb}`
-        : `${pa}-${pb}`;
+    const isTiebreak = score.games[0] === 6 && score.games[1] === 6;
+    const points = isTiebreak
+        ? `${pa}-${pb} (tiebreak)`
+        : pa <= 3 && pb <= 3
+            ? `${POINT_LABELS[pa] || pa}-${POINT_LABELS[pb] || pb}`
+            : `${pa}-${pb}`;
     const server = score.serving === "a" ? playerA.split(" ").pop() : playerB.split(" ").pop();
     return `Sets: ${sets}  Games: ${games}  Points: ${points}  (${server} serving)`;
 }
