@@ -110,9 +110,12 @@ export default function SimulatorPage() {
                 combined: update.combined,
             });
             setProbHistory(prev => {
-                const tp = update.total_points || (prev.length > 0 ? prev[prev.length - 1].points + 1 : 0);
+                const tp = update.total_points || (prev.length > 0 ? prev[prev.length - 1].points : 0);
                 if (prev.length > 0 && prev[prev.length - 1].points === tp) {
-                    return prev; // same point count, skip duplicate
+                    // Same point count — update probability in place
+                    const updated = [...prev];
+                    updated[updated.length - 1] = { points: tp, prob: update.current_win_prob };
+                    return updated;
                 }
                 return [...prev, { points: tp, prob: update.current_win_prob }];
             });
