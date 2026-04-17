@@ -39,12 +39,23 @@ export interface ScoreState {
     serving: string;
 }
 
+export interface ServeComponents {
+    first_in: number;
+    first_won: number;
+    second_won: number;
+    p_serve: number;
+}
+
 export interface LookupResult {
     player_a: string;
     player_b: string;
     gender: string;
     p_a_prior: number;
     p_b_prior: number;
+    serve_a_prior: ServeComponents;
+    serve_a_updated: ServeComponents;
+    serve_b_prior: ServeComponents;
+    serve_b_updated: ServeComponents;
     match_found: boolean;
     match_url: string;
     current_score: ScoreState;

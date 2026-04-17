@@ -38,13 +38,22 @@ export async function runSimulation(
     return resp.json();
 }
 
+import type { ServeComponents } from "./types";
+
 export async function fetchMatchUpdate(
-    matchUrl: string, p_a_prior: number, p_b_prior: number, num_simulations: number = 100000
+    matchUrl: string,
+    serveA: ServeComponents,
+    serveB: ServeComponents,
+    num_simulations: number = 100000
 ): Promise<MatchUpdateResult> {
     const params = new URLSearchParams({
         match_url: matchUrl,
-        p_a_prior: String(p_a_prior),
-        p_b_prior: String(p_b_prior),
+        a_first_in: String(serveA.first_in),
+        a_first_won: String(serveA.first_won),
+        a_second_won: String(serveA.second_won),
+        b_first_in: String(serveB.first_in),
+        b_first_won: String(serveB.first_won),
+        b_second_won: String(serveB.second_won),
         num_simulations: String(num_simulations),
     });
     const resp = await fetch(`/api/match-update?${params}`);

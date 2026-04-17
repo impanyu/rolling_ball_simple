@@ -56,9 +56,16 @@ export default function SimulatorPage() {
     const doAutoUpdate = async () => {
         if (!lookup?.match_url) return;
         try {
-            const update = await fetchMatchUpdate(lookup.match_url, lookup.p_a_prior, lookup.p_b_prior);
+            const update = await fetchMatchUpdate(
+                lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior
+            );
             if (update.error) return;
-            setLookup(prev => prev ? { ...prev, current_score: update.current_score, p_a_updated: update.p_a_updated, p_b_updated: update.p_b_updated } : prev);
+            setLookup(prev => prev ? {
+                ...prev,
+                current_score: update.current_score,
+                p_a_updated: update.p_a_updated,
+                p_b_updated: update.p_b_updated,
+            } : prev);
             setPA(update.p_a_updated);
             setPB(update.p_b_updated);
             setSimResult({

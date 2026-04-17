@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from fastapi import APIRouter
 
 from app.tennis.engine import MatchState, build_win_prob_table
-from app.tennis.simulator import simulate_max_prob_distribution, simulate_time_slices, win_prob_at_state
-from app.tennis.bayesian import bayesian_update_p
+from app.tennis.simulator import simulate_time_slices, win_prob_at_state
+from app.tennis.bayesian import update_serve_components
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,6 +41,30 @@ def score_to_match_state(score: ScoreInput) -> MatchState:
         points_b=score.points[1],
         is_a_serving=(score.serving == "a"),
         is_tiebreak=is_tiebreak,
+    )
+
+
+def _update_p_from_stats(prior_serve: dict, stats: dict, prefix: str) -> dict:
+    """Update serve components from FlashScore match stats."""
+    obs_1st_in = stats.get(f"{prefix}_1st_serve_total", 0)  # 1st serves attempted
+    obs_1st_total = obs_1st_in + stats.get(f"{prefix}_2nd_serve_total", 0)  # total serve points = 1st + 2nd
+    obs_1st_won = stats.get(f"{prefix}_1st_serve_won", 0)
+    obs_1st_serve_points = stats.get(f"{prefix}_1st_serve_total", 0)
+    obs_2nd_won = stats.get(f"{prefix}_2nd_serve_won", 0)
+    obs_2nd_serve_points = stats.get(f"{prefix}_2nd_serve_total", 0)
+
+    # first_in = 1st serves in / total serve points
+    # We approximate: obs_1st_in = obs_1st_serve_points (serves that were in play as 1st serve)
+    return update_serve_components(
+        prior_first_in=prior_serve["first_in"],
+        prior_first_won=prior_serve["first_won"],
+        prior_second_won=prior_serve["second_won"],
+        obs_1st_in=obs_1st_serve_points,
+        obs_1st_total=obs_1st_serve_points + obs_2nd_serve_points,
+        obs_1st_won=obs_1st_won,
+        obs_1st_serve_points=obs_1st_serve_points,
+        obs_2nd_won=obs_2nd_won,
+        obs_2nd_serve_points=obs_2nd_serve_points,
     )
 
 
@@ -85,10 +109,13 @@ async def lookup_match(req: LookupRequest):
         logger.error(f"Failed to parse player names: {e}")
         return {"error": f"Could not parse player names: {e}"}
 
-    # Step 2: Get p values from Tennis Abstract
-    from app.scraper.tennis_abstract import scrape_player_p
-    p_a = await scrape_player_p(player_a, gender)
-    p_b = await scrape_player_p(player_b, gender)
+    # Step 2: Get serve components from Tennis Abstract
+    from app.scraper.tennis_abstract import scrape_player_serve_stats
+    serve_a = await scrape_player_serve_stats(player_a, gender)
+    serve_b = await scrape_player_serve_stats(player_b, gender)
+
+    p_a_prior = serve_a["p_serve"]
+    p_b_prior = serve_b["p_serve"]
 
     # Step 3: Search FlashScore for live match
     from app.scraper.flashscore import search_and_open_match, read_match_score, read_match_stats
@@ -97,8 +124,8 @@ async def lookup_match(req: LookupRequest):
     match_found = match_page is not None
     current_score = {"sets": [0, 0], "games": [0, 0], "points": [0, 0], "serving": "a"}
     match_url = ""
-    p_a_updated = p_a
-    p_b_updated = p_b
+    serve_a_updated = serve_a.copy()
+    serve_b_updated = serve_b.copy()
 
     if match_page:
         match_url = match_page.url
@@ -111,37 +138,35 @@ async def lookup_match(req: LookupRequest):
                 "serving": score_data["serving"],
             }
 
-        # Update p values from live match stats
+        # Update serve components from live match stats (1st/2nd separately)
         stats = await read_match_stats(match_page)
         if stats:
-            a_won = stats.get("a_serve_won", 0)
-            a_total = stats.get("a_serve_total", 0)
-            b_won = stats.get("b_serve_won", 0)
-            b_total = stats.get("b_serve_total", 0)
-            if a_total > 0:
-                p_a_updated = bayesian_update_p(p_a, a_won, a_total)
-            if b_total > 0:
-                p_b_updated = bayesian_update_p(p_b, b_won, b_total)
+            serve_a_updated = _update_p_from_stats(serve_a, stats, "a")
+            serve_b_updated = _update_p_from_stats(serve_b, stats, "b")
 
     return {
         "player_a": player_a,
         "player_b": player_b,
         "gender": gender,
-        "p_a_prior": round(p_a, 4),
-        "p_b_prior": round(p_b, 4),
+        "p_a_prior": p_a_prior,
+        "p_b_prior": p_b_prior,
+        "serve_a_prior": serve_a,
+        "serve_a_updated": serve_a_updated,
+        "serve_b_prior": serve_b,
+        "serve_b_updated": serve_b_updated,
         "match_found": match_found,
         "match_url": match_url,
         "current_score": current_score,
-        "p_a_updated": round(p_a_updated, 4),
-        "p_b_updated": round(p_b_updated, 4),
+        "p_a_updated": serve_a_updated["p_serve"],
+        "p_b_updated": serve_b_updated["p_serve"],
     }
 
 
 @router.get("/api/match-update")
 async def match_update(
     match_url: str,
-    p_a_prior: float,
-    p_b_prior: float,
+    a_first_in: float, a_first_won: float, a_second_won: float,
+    b_first_in: float, b_first_won: float, b_second_won: float,
     num_simulations: int = 100_000,
 ):
     from app.scraper.browser import get_browser
@@ -169,29 +194,28 @@ async def match_update(
         "serving": score_data["serving"],
     }
 
-    p_a_updated = p_a_prior
-    p_b_updated = p_b_prior
+    serve_a_prior = {"first_in": a_first_in, "first_won": a_first_won, "second_won": a_second_won}
+    serve_b_prior = {"first_in": b_first_in, "first_won": b_first_won, "second_won": b_second_won}
+    serve_a_updated = serve_a_prior.copy()
+    serve_b_updated = serve_b_prior.copy()
 
     stats = await read_match_stats(match_page)
     if stats:
-        a_won = stats.get("a_serve_won", 0)
-        a_total = stats.get("a_serve_total", 0)
-        b_won = stats.get("b_serve_won", 0)
-        b_total = stats.get("b_serve_total", 0)
-        if a_total > 0:
-            p_a_updated = bayesian_update_p(p_a_prior, a_won, a_total)
-        if b_total > 0:
-            p_b_updated = bayesian_update_p(p_b_prior, b_won, b_total)
+        serve_a_updated = _update_p_from_stats(serve_a_prior, stats, "a")
+        serve_b_updated = _update_p_from_stats(serve_b_prior, stats, "b")
+
+    p_a = serve_a_updated.get("p_serve", a_first_in * a_first_won + (1 - a_first_in) * a_second_won)
+    p_b = serve_b_updated.get("p_serve", b_first_in * b_first_won + (1 - b_first_in) * b_second_won)
 
     state = score_to_match_state(ScoreInput(**score))
-    table = build_win_prob_table(p_a_updated, p_b_updated)
-    sim_result = simulate_time_slices(
-        state, p_a_updated, p_b_updated, table, num_simulations
-    )
+    table = build_win_prob_table(p_a, p_b)
+    sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
 
     return {
         "current_score": score,
-        "p_a_updated": round(p_a_updated, 4),
-        "p_b_updated": round(p_b_updated, 4),
+        "p_a_updated": round(p_a, 4),
+        "p_b_updated": round(p_b, 4),
+        "serve_a_updated": serve_a_updated,
+        "serve_b_updated": serve_b_updated,
         **sim_result,
     }

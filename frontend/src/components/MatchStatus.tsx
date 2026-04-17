@@ -41,24 +41,45 @@ export default function MatchStatus({
             {!lookup.match_found && (
                 <p style={{ color: "#888" }}>No live match found. Using default score 0-0.</p>
             )}
-            <div style={{ display: "flex", gap: 24, marginTop: 12 }}>
-                <div>
-                    <label style={{ fontWeight: 600 }}>{lookup.player_a.split(" ").pop()} p:</label>
-                    {" "}<span style={{ color: "#888", fontSize: 14 }}>prior {lookup.p_a_prior.toFixed(3)}</span>
-                    <br />
-                    <input type="number" step={0.001} value={pA}
-                        onChange={(e) => onPChange(Number(e.target.value), pB)}
-                        style={{ width: 80, padding: "4px 8px", marginTop: 4 }} />
-                </div>
-                <div>
-                    <label style={{ fontWeight: 600 }}>{lookup.player_b.split(" ").pop()} p:</label>
-                    {" "}<span style={{ color: "#888", fontSize: 14 }}>prior {lookup.p_b_prior.toFixed(3)}</span>
-                    <br />
-                    <input type="number" step={0.001} value={pB}
-                        onChange={(e) => onPChange(pA, Number(e.target.value))}
-                        style={{ width: 80, padding: "4px 8px", marginTop: 4 }} />
-                </div>
-            </div>
+            <table style={{ marginTop: 12, fontSize: 14, borderCollapse: "collapse" }}>
+                <thead>
+                    <tr style={{ borderBottom: "1px solid #ddd" }}>
+                        <th style={{ textAlign: "left", padding: "4px 12px" }}></th>
+                        <th style={{ padding: "4px 12px" }}>1st In</th>
+                        <th style={{ padding: "4px 12px" }}>1st Won</th>
+                        <th style={{ padding: "4px 12px" }}>2nd Won</th>
+                        <th style={{ padding: "4px 12px" }}>p (combined)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {[
+                        { name: lookup.player_a.split(" ").pop(), prior: lookup.serve_a_prior, updated: lookup.serve_a_updated, isA: true },
+                        { name: lookup.player_b.split(" ").pop(), prior: lookup.serve_b_prior, updated: lookup.serve_b_updated, isA: false },
+                    ].map(({ name, prior, updated, isA }) => (
+                        <tr key={name} style={{ borderBottom: "1px solid #eee" }}>
+                            <td style={{ fontWeight: 600, padding: "4px 12px" }}>{name}</td>
+                            <td style={{ padding: "4px 12px", textAlign: "center" }}>
+                                <span style={{ color: "#888" }}>{(prior.first_in * 100).toFixed(1)}%</span>
+                                {" → "}{(updated.first_in * 100).toFixed(1)}%
+                            </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center" }}>
+                                <span style={{ color: "#888" }}>{(prior.first_won * 100).toFixed(1)}%</span>
+                                {" → "}{(updated.first_won * 100).toFixed(1)}%
+                            </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center" }}>
+                                <span style={{ color: "#888" }}>{(prior.second_won * 100).toFixed(1)}%</span>
+                                {" → "}{(updated.second_won * 100).toFixed(1)}%
+                            </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center" }}>
+                                <input type="number" step={0.001}
+                                    value={isA ? pA : pB}
+                                    onChange={(e) => isA ? onPChange(Number(e.target.value), pB) : onPChange(pA, Number(e.target.value))}
+                                    style={{ width: 70, padding: "2px 6px" }} />
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
             {currentWinProb !== null && (
                 <p style={{ fontSize: 18, marginTop: 12 }}>
                     Current P({lookup.player_a.split(" ").pop()} wins):{" "}
