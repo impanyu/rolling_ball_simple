@@ -109,9 +109,14 @@ async def lookup_match(req: LookupRequest):
         logger.error(f"Failed to parse player names: {e}")
         return {"error": f"Could not parse player names: {e}"}
 
-    # Step 2: Search FlashScore for live match (do this first to get surface)
+    # Step 2: Search FlashScore for live match (do this first to get surface + real names)
     from app.scraper.flashscore import search_and_open_match, read_match_score, read_match_stats, read_match_surface
-    match_page = await search_and_open_match(player_a, player_b)
+    match_page, real_a, real_b = await search_and_open_match(player_a, player_b)
+
+    # Use real names from FlashScore URL if available (more accurate than LLM output)
+    if real_a != player_a:
+        logger.info(f"Using FlashScore names: {real_a} vs {real_b} (LLM: {player_a} vs {player_b})")
+        player_a, player_b = real_a, real_b
 
     surface = None
     if match_page:

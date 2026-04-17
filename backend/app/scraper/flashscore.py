@@ -190,9 +190,30 @@ async def read_flashscore_pbp(page: Page) -> list[dict]:
     return raw
 
 
-async def search_and_open_match(player_a: str, player_b: str) -> Page | None:
+def extract_player_names_from_url(url: str) -> tuple[str, str] | None:
+    """Extract player full names from FlashScore match URL.
+    URL pattern: /game/tennis/lastname-firstname-ID/lastname-firstname-ID/
+    Returns (player_a_name, player_b_name) or None.
+    """
+    match = re.search(
+        r'/game/tennis/([\w-]+?)-(\w{8})/([\w-]+?)-(\w{8})/',
+        url,
+    )
+    if not match:
+        return None
+    slug_a, _, slug_b, _ = match.groups()
+    # Convert 'lastname-firstname' to 'Firstname Lastname'
+    parts_a = slug_a.split('-')
+    parts_b = slug_b.split('-')
+    name_a = ' '.join(w.capitalize() for w in reversed(parts_a))
+    name_b = ' '.join(w.capitalize() for w in reversed(parts_b))
+    return name_a, name_b
+
+
+async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | None, str, str]:
     """Search FlashScore tennis page for a match between two players.
     Opens the main match page (not PBP subpage) to get current score.
+    Returns (page, real_name_a, real_name_b). page is None if not found.
     """
     browser = await get_browser()
     page = await browser.new_page()
@@ -210,16 +231,21 @@ async def search_and_open_match(player_a: str, player_b: str) -> Page | None:
                 match_url = await link.get_attribute("href") or ""
                 if not match_url.startswith("http"):
                     match_url = f"https://www.flashscoreusa.com{match_url}"
-                # Go to main match page (not PBP) to get current score
+
+                # Extract real names from URL
+                names = extract_player_names_from_url(match_url)
+                real_a = names[0] if names else player_a
+                real_b = names[1] if names else player_b
+
                 await page.goto(match_url, timeout=15000)
                 await page.wait_for_timeout(5000)
-                logger.info(f"Found match: {match_url}")
-                return page
+                logger.info(f"Found match: {match_url} ({real_a} vs {real_b})")
+                return page, real_a, real_b
 
         logger.warning(f"No match found for {player_a} vs {player_b}")
         await page.close()
-        return None
+        return None, player_a, player_b
     except Exception as e:
         logger.error(f"FlashScore search failed: {e}")
         await page.close()
-        return None
+        return None, player_a, player_b
