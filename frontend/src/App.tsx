@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, useLocation } from "react-router-dom";
 import { useState } from "react";
 import NavBar from "./components/NavBar";
 import QueryForm from "./components/QueryForm";
@@ -38,17 +38,28 @@ function QueryPage() {
     );
 }
 
+function AppContent() {
+    const location = useLocation();
+    const currentPath = location.pathname;
+
+    return (
+        <div style={{ maxWidth: 900, margin: "0 auto", padding: 20, fontFamily: "system-ui" }}>
+            <h1>Tennis Odds Tool</h1>
+            <NavBar />
+            <div style={{ display: currentPath === "/" ? "block" : "none" }}>
+                <QueryPage />
+            </div>
+            <div style={{ display: currentPath === "/simulate" ? "block" : "none" }}>
+                <SimulatorPage />
+            </div>
+        </div>
+    );
+}
+
 function App() {
     return (
         <BrowserRouter>
-            <div style={{ maxWidth: 900, margin: "0 auto", padding: 20, fontFamily: "system-ui" }}>
-                <h1>Tennis Odds Tool</h1>
-                <NavBar />
-                <Routes>
-                    <Route path="/" element={<QueryPage />} />
-                    <Route path="/simulate" element={<SimulatorPage />} />
-                </Routes>
-            </div>
+            <AppContent />
         </BrowserRouter>
     );
 }
