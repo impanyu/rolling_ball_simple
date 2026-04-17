@@ -38,19 +38,27 @@ def parse_serve_stats_from_text(
     text: str, surface: str | None = None, opponent_rank: int | None = None
 ) -> dict | None:
     """Parse serve stats, adjusting for surface and opponent strength.
-    If opponent_rank <= 10, blend with 'vs Top 10' stats.
-    If opponent_rank 11-50, interpolate between 'vs Top 10' and overall.
+    Priority: current season > Last 52 > Career.
+    If opponent_rank <= 50, blend with 'vs Top 10' stats.
     """
-    # Get surface-specific or overall stats
-    base = None
-    if surface and surface.lower() in SURFACE_LABELS:
-        label = SURFACE_LABELS[surface.lower()]
-        base = _parse_stat_block(text, label)
-        if not base:
-            logger.warning(f"Could not find {label} surface stats, falling back to Last 52")
+    import datetime
+    current_year = str(datetime.date.today().year)
 
-    if not base:
-        base = _parse_stat_block(text, "Last 52")
+    # Try current season first, then Last 52, then Career
+    base = _parse_stat_block(text, current_year)
+    if base:
+        logger.info(f"Using {current_year} season stats")
+    else:
+        if surface and surface.lower() in SURFACE_LABELS:
+            label = SURFACE_LABELS[surface.lower()]
+            base = _parse_stat_block(text, label)
+            if base:
+                logger.info(f"Using {label} surface stats")
+            else:
+                logger.warning(f"Could not find {label} surface stats")
+
+        if not base:
+            base = _parse_stat_block(text, "Last 52")
 
     if not base:
         return None
@@ -114,8 +122,12 @@ async def scrape_player_serve_stats(
 
     browser = await get_browser()
 
+    import datetime
+    current_year = str(datetime.date.today().year)
+
     for variant in variants:
-        url = f"https://www.tennisabstract.com/cgi-bin/{prefix}player-classic.cgi?p={variant}&f=ACareerqq"
+        # Use current season filter — page also includes Last 52, vs Top 10, surface breakdowns
+        url = f"https://www.tennisabstract.com/cgi-bin/{prefix}player-classic.cgi?p={variant}&f=A{current_year}qq"
         try:
             page = await browser.new_page()
             await page.goto(url, timeout=15000)
@@ -136,7 +148,7 @@ async def scrape_player_serve_stats(
     # Also try without gender prefix
     alt_prefix = "" if prefix == "w" else "w"
     for variant in variants[:1]:
-        url = f"https://www.tennisabstract.com/cgi-bin/{alt_prefix}player-classic.cgi?p={variant}&f=ACareerqq"
+        url = f"https://www.tennisabstract.com/cgi-bin/{alt_prefix}player-classic.cgi?p={variant}&f=A{current_year}qq"
         try:
             page = await browser.new_page()
             await page.goto(url, timeout=15000)
