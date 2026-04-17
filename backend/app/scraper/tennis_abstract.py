@@ -4,16 +4,22 @@ from app.scraper.browser import get_browser
 
 logger = logging.getLogger(__name__)
 
-# Defaults when player not found (fractions, not percentages)
 DEFAULTS_ATP = {"first_in": 0.61, "first_won": 0.73, "second_won": 0.52}
 DEFAULTS_WTA = {"first_in": 0.60, "first_won": 0.66, "second_won": 0.47}
 
+SURFACE_LABELS = {"hard": "Hard", "clay": "Clay", "grass": "Grass"}
 
-def parse_serve_stats_from_text(text: str) -> dict | None:
-    match = re.search(
-        r'Last 52.*?(\d+\.\d+)%.*?(\d+\.\d+)%.*?(\d+\.\d+)%.*?(\d+\.\d+)%',
-        text,
+
+def _parse_stat_block(text: str, label: str) -> dict | None:
+    """Parse a stat block starting with `label` followed by percentage fields.
+    Pattern: 'Label W-L (pct%)...Ace%...1stIn%...1stWon%...2ndWon%...'
+    """
+    pattern = (
+        re.escape(label)
+        + r'\s+\d+-\d+\s*\(\d+%\).*?'
+        + r'(\d+\.\d+)%.*?(\d+\.\d+)%.*?(\d+\.\d+)%.*?(\d+\.\d+)%'
     )
+    match = re.search(pattern, text)
     if not match:
         return None
 
@@ -31,8 +37,26 @@ def parse_serve_stats_from_text(text: str) -> dict | None:
     }
 
 
-async def scrape_player_serve_stats(player_name: str, gender: str = "wta") -> dict:
+def parse_serve_stats_from_text(text: str, surface: str | None = None) -> dict | None:
+    """Parse serve stats from Tennis Abstract page text.
+    If surface is provided ('hard'/'clay'/'grass'), extract surface-specific stats.
+    Otherwise extract 'Last 52' overall stats.
+    """
+    if surface and surface.lower() in SURFACE_LABELS:
+        label = SURFACE_LABELS[surface.lower()]
+        result = _parse_stat_block(text, label)
+        if result:
+            return result
+        logger.warning(f"Could not find {label} surface stats, falling back to Last 52")
+
+    return _parse_stat_block(text, "Last 52")
+
+
+async def scrape_player_serve_stats(
+    player_name: str, gender: str = "wta", surface: str | None = None
+) -> dict:
     """Scrape player's serve components from Tennis Abstract.
+    If surface is provided, returns surface-specific stats.
     Returns dict with first_in, first_won, second_won, p_serve (all as fractions 0-1).
     """
     prefix = "w" if gender == "wta" else ""
@@ -48,9 +72,10 @@ async def scrape_player_serve_stats(player_name: str, gender: str = "wta") -> di
         text = await page.text_content("body") or ""
         await page.close()
 
-        result = parse_serve_stats_from_text(text)
+        result = parse_serve_stats_from_text(text, surface)
         if result:
-            logger.info(f"Got serve stats for {player_name}: fi={result['first_in']}, fw={result['first_won']}, sw={result['second_won']}, p={result['p_serve']}")
+            surface_label = surface or "overall"
+            logger.info(f"Got serve stats for {player_name} ({surface_label}): fi={result['first_in']}, fw={result['first_won']}, sw={result['second_won']}, p={result['p_serve']}")
             return result
 
         logger.warning(f"Could not parse stats for {player_name}, using defaults")
@@ -61,7 +86,6 @@ async def scrape_player_serve_stats(player_name: str, gender: str = "wta") -> di
     return {**defaults, "p_serve": round(p, 4)}
 
 
-# Keep backward compatibility
 async def scrape_player_p(player_name: str, gender: str = "wta") -> float:
     stats = await scrape_player_serve_stats(player_name, gender)
     return stats["p_serve"]

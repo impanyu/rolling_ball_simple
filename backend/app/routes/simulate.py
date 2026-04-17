@@ -109,17 +109,22 @@ async def lookup_match(req: LookupRequest):
         logger.error(f"Failed to parse player names: {e}")
         return {"error": f"Could not parse player names: {e}"}
 
-    # Step 2: Get serve components from Tennis Abstract
+    # Step 2: Search FlashScore for live match (do this first to get surface)
+    from app.scraper.flashscore import search_and_open_match, read_match_score, read_match_stats, read_match_surface
+    match_page = await search_and_open_match(player_a, player_b)
+
+    surface = None
+    if match_page:
+        surface = await read_match_surface(match_page)
+        logger.info(f"Detected surface: {surface}")
+
+    # Step 3: Get serve components from Tennis Abstract (surface-specific if available)
     from app.scraper.tennis_abstract import scrape_player_serve_stats
-    serve_a = await scrape_player_serve_stats(player_a, gender)
-    serve_b = await scrape_player_serve_stats(player_b, gender)
+    serve_a = await scrape_player_serve_stats(player_a, gender, surface)
+    serve_b = await scrape_player_serve_stats(player_b, gender, surface)
 
     p_a_prior = serve_a["p_serve"]
     p_b_prior = serve_b["p_serve"]
-
-    # Step 3: Search FlashScore for live match
-    from app.scraper.flashscore import search_and_open_match, read_match_score, read_match_stats
-    match_page = await search_and_open_match(player_a, player_b)
 
     match_found = match_page is not None
     current_score = {"sets": [0, 0], "games": [0, 0], "points": [0, 0], "serving": "a"}
@@ -148,6 +153,7 @@ async def lookup_match(req: LookupRequest):
         "player_a": player_a,
         "player_b": player_b,
         "gender": gender,
+        "surface": surface,
         "p_a_prior": p_a_prior,
         "p_b_prior": p_b_prior,
         "serve_a_prior": serve_a,

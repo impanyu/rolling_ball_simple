@@ -6,6 +6,18 @@ from app.scraper.browser import get_browser
 logger = logging.getLogger(__name__)
 
 
+async def read_match_surface(page: Page) -> str | None:
+    """Extract surface type from FlashScore match page (e.g. 'clay', 'hard', 'grass')."""
+    try:
+        body = await page.text_content("body") or ""
+        match = re.search(r'(?:clay|hard|grass)', body.lower())
+        if match:
+            return match.group(0)
+    except Exception:
+        pass
+    return None
+
+
 async def read_match_score(page: Page) -> dict | None:
     """Extract current match score from the FlashScore match page header.
     Works on the main match page (not PBP subpage).
