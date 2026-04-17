@@ -50,18 +50,26 @@ async def read_match_score(page: Page) -> dict | None:
             if games_match:
                 games_a, games_b = int(games_match.group(1)), int(games_match.group(2))
 
-        # Check for tiebreak and extract tiebreak score
+        # Check for tiebreak
         is_tiebreak = "tiebreak" in info_text.lower()
-        points_a, points_b = 0, 0
-        if is_tiebreak:
-            tb_match = re.search(r'\(\s*(\d+)\s*:\s*(\d+)\s*\)', info_text)
-            if tb_match:
-                points_a, points_b = int(tb_match.group(1)), int(tb_match.group(2))
 
-        # Determine who is serving from the serve indicator
+        # Extract point score from "( X : Y )" — works for both regular games and tiebreaks
+        points_a, points_b = 0, 0
+        pts_match = re.search(r'\(\s*(\d+)\s*:\s*(\d+)\s*\)', info_text)
+        if pts_match:
+            raw_a, raw_b = int(pts_match.group(1)), int(pts_match.group(2))
+            if is_tiebreak:
+                points_a, points_b = raw_a, raw_b
+            else:
+                # Map tennis game scores (0,15,30,40) to engine encoding (0,1,2,3)
+                score_map = {0: 0, 15: 1, 30: 2, 40: 3}
+                points_a = score_map.get(raw_a, 3)
+                points_b = score_map.get(raw_b, 3)
+                # Handle advantage: if one has 40 and other has AD (shown as 40:A or similar)
+                # In FlashScore both show as numbers, deuce is 40:40 → 3:3
+
+        # Determine who is serving
         serving = "a"
-        serve_els = await page.query_selector_all('[class*="serveIndicator"], [class*="serve"]')
-        # FlashScore typically puts a serve dot near the serving player
 
         return {
             "sets": [sets_a, sets_b],
