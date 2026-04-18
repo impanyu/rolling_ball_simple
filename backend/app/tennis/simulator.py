@@ -149,6 +149,51 @@ def _simulate_one_path(
     return max_prob
 
 
+MAX_PATH_POINTS = 100
+
+
+def simulate_max_prob(
+    start_state: MatchState,
+    p_a: float,
+    p_b: float,
+    table: Dict[Tuple, float],
+    n_simulations: int = 100_000,
+    max_points: int = MAX_PATH_POINTS,
+) -> dict:
+    """Simulate paths up to max_points, record the max P(A wins) per path."""
+    rng = random.Random()
+    current_win_prob = win_prob_at_state(start_state, table, p_a, p_b) * 100.0
+
+    max_probs: List[float] = []
+    for _ in range(n_simulations):
+        state = start_state
+        path_max = win_prob_at_state(state, table, p_a, p_b)
+
+        for _ in range(max_points):
+            if state.is_terminal():
+                terminal_prob = 1.0 if state.sets_a == 2 else 0.0
+                if terminal_prob > path_max:
+                    path_max = terminal_prob
+                break
+
+            p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
+            a_wins_point = rng.random() < p_a_point
+            state = next_state(state, a_wins_point)
+
+            prob = win_prob_at_state(state, table, p_a, p_b) if not state.is_terminal() else (1.0 if state.sets_a == 2 else 0.0)
+            if prob > path_max:
+                path_max = prob
+
+        max_probs.append(path_max * 100.0)
+
+    return {
+        "current_win_prob": round(current_win_prob, 2),
+        "total_count": n_simulations,
+        "histogram": _build_histogram(max_probs),
+        "stats": _compute_stats(max_probs),
+    }
+
+
 HORIZON_POINTS = [10, 20, 30, 50, 80]
 HORIZON_WEIGHTS = {n: 1.0 / n for n in HORIZON_POINTS}
 

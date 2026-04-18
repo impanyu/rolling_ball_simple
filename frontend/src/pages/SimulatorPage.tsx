@@ -4,7 +4,7 @@ import MatchStatus from "../components/MatchStatus";
 import Histogram from "../components/Histogram";
 import WinProbChart from "../components/WinProbChart";
 import DeltaCurve from "../components/DeltaCurve";
-import { lookupMatch, runSimulation, fetchMatchUpdate, rescrapePlayer } from "../api";
+import { lookupMatch, runSimulation, runSimulateMax, fetchMatchUpdate, rescrapePlayer } from "../api";
 import type { LookupResult, SimulateResult, QueryResponse, HistogramBin } from "../types";
 
 function flipHistogram(histogram: HistogramBin[]): HistogramBin[] {
@@ -45,6 +45,8 @@ export default function SimulatorPage() {
     const [urlB, setUrlB] = useState("");
     const [rescraping, setRescraping] = useState(false);
     const [statsHistory, setStatsHistory] = useState<Record<string, number>[]>([]);
+    const [simTab, setSimTab] = useState<"timeslice" | "maxprob">("timeslice");
+    const [maxResult, setMaxResult] = useState<(QueryResponse & { current_win_prob: number }) | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const handleLookup = async (input: string) => {
@@ -67,8 +69,12 @@ export default function SimulatorPage() {
             setPB(result.p_b_updated);
             if (result.match_stats) setStatsHistory([result.match_stats]);
             setSimulating(true);
-            const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000);
+            const [sim, maxSim] = await Promise.all([
+                runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000),
+                runSimulateMax(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000),
+            ]);
             setSimResult(sim);
+            setMaxResult(maxSim);
             setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob }]);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Lookup failed");
@@ -121,6 +127,11 @@ export default function SimulatorPage() {
                 slices: update.slices,
                 combined: update.combined,
             });
+            // Also update max prob simulation
+            if (lookup) {
+                const maxSim = await runSimulateMax(update.p_a_updated, update.p_b_updated, update.current_score, firstServer, 100000);
+                setMaxResult(maxSim);
+            }
             setProbHistory(prev => {
                 const tp = update.total_points;
                 // Skip if total_points is missing/zero but we already have real data
@@ -340,10 +351,48 @@ export default function SimulatorPage() {
                 </div>
             )}
 
+            {/* Simulation mode tabs */}
+            {(simResult || maxResult) && (
+                <div style={{ marginTop: 16, display: "flex", gap: 0, borderBottom: "2px solid #ddd" }}>
+                    <button
+                        onClick={() => setSimTab("timeslice")}
+                        style={{
+                            padding: "8px 20px", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600,
+                            background: simTab === "timeslice" ? "white" : "#f0f0f0",
+                            borderBottom: simTab === "timeslice" ? "2px solid #3498db" : "2px solid transparent",
+                            color: simTab === "timeslice" ? "#3498db" : "#888",
+                        }}
+                    >
+                        Time Slices
+                    </button>
+                    <button
+                        onClick={() => setSimTab("maxprob")}
+                        style={{
+                            padding: "8px 20px", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600,
+                            background: simTab === "maxprob" ? "white" : "#f0f0f0",
+                            borderBottom: simTab === "maxprob" ? "2px solid #e74c3c" : "2px solid transparent",
+                            color: simTab === "maxprob" ? "#e74c3c" : "#888",
+                        }}
+                    >
+                        Max Prob (100 pts)
+                    </button>
+                </div>
+            )}
+
             <div style={{ marginTop: 16 }}>
                 {simulating && <p style={{ textAlign: "center", color: "#888" }}>Simulating...</p>}
 
-                {simResult && (
+                {simTab === "maxprob" && maxResult && (
+                    <Histogram
+                        data={{ total_count: maxResult.total_count, histogram: isFlipped ? flipHistogram(maxResult.histogram) : maxResult.histogram, stats: isFlipped ? flipStats(maxResult.stats) : maxResult.stats }}
+                        xLabel="Max P(win) %"
+                        unit="%"
+                        title={`Max Win Probability in next 100 pts — ${viewName}`}
+                        currentProb={currentProb ?? undefined}
+                    />
+                )}
+
+                {simTab === "timeslice" && simResult && (
                     <>
                         {/* Per-horizon small histograms (collapsible) */}
                         <details style={{ marginBottom: 12 }}>

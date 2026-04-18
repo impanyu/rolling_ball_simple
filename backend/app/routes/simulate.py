@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter
 
 from app.tennis.engine import MatchState, build_win_prob_table
-from app.tennis.simulator import simulate_time_slices, win_prob_at_state
+from app.tennis.simulator import simulate_time_slices, simulate_max_prob, win_prob_at_state
 from app.tennis.bayesian import update_serve_components, multi_scale_p
 
 logger = logging.getLogger(__name__)
@@ -116,6 +116,15 @@ async def simulate(req: SimulateRequest):
     result = simulate_time_slices(
         state, req.p_a, req.p_b, table, req.num_simulations
     )
+    return result
+
+
+@router.post("/api/simulate-max")
+async def simulate_max(req: SimulateRequest):
+    """Simulate paths up to 100 points, return max P(win) histogram."""
+    state = score_to_match_state(req.score, req.first_server)
+    table = build_win_prob_table(req.p_a, req.p_b)
+    result = simulate_max_prob(state, req.p_a, req.p_b, table, req.num_simulations)
     return result
 
 

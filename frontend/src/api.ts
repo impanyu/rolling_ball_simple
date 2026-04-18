@@ -40,6 +40,18 @@ export async function runSimulation(
 
 import type { ServeComponents } from "./types";
 
+export async function runSimulateMax(
+    p_a: number, p_b: number, score: ScoreState, firstServer: string = "a", num_simulations: number = 100000
+): Promise<QueryResponse & { current_win_prob: number }> {
+    const resp = await fetch("/api/simulate-max", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ p_a, p_b, score, first_server: firstServer, num_simulations }),
+    });
+    if (!resp.ok) throw new Error(`Simulate-max failed: ${resp.status}`);
+    return resp.json();
+}
+
 export async function rescrapePlayer(
     url: string, player: "a" | "b", surface?: string, opponentRank?: number
 ): Promise<{ player: string; serve_stats: ServeComponents; error?: string }> {
