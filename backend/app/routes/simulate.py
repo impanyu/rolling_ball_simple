@@ -284,6 +284,7 @@ async def _do_match_update(req: dict):
         "serving": score_data["serving"],
     }
 
+    logger.info(f">>> Score read: {score}, prev: {prev_score}")
     if prev_score and score == prev_score:
         return {"changed": False, "current_score": score}
 
