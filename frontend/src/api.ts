@@ -27,12 +27,12 @@ export async function lookupMatch(playerInput: string): Promise<LookupResult> {
 }
 
 export async function runSimulation(
-    p_a: number, p_b: number, score: ScoreState, num_simulations: number = 100000
+    p_a: number, p_b: number, score: ScoreState, firstServer: string = "a", num_simulations: number = 100000
 ): Promise<SimulateResult> {
     const resp = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ p_a, p_b, score, first_server: "a", num_simulations }),
+        body: JSON.stringify({ p_a, p_b, score, first_server: firstServer, num_simulations }),
     });
     if (!resp.ok) throw new Error(`Simulation failed: ${resp.status}`);
     return resp.json();
@@ -57,6 +57,7 @@ export async function fetchMatchUpdate(
     serveAPrior: ServeComponents,
     serveBPrior: ServeComponents,
     statsHistory: Record<string, number>[],
+    firstServer: string = "a",
     num_simulations: number = 100000
 ): Promise<MatchUpdateResult> {
     const resp = await fetch("/api/match-update", {
@@ -67,7 +68,7 @@ export async function fetchMatchUpdate(
             serve_a_prior: serveAPrior,
             serve_b_prior: serveBPrior,
             stats_history: statsHistory,
-            first_server: "a",
+            first_server: firstServer,
             num_simulations,
         }),
     });

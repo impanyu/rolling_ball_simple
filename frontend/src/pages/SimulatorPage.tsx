@@ -38,6 +38,7 @@ export default function SimulatorPage() {
     const [pA, setPA] = useState(0.64);
     const [pB, setPB] = useState(0.64);
     const [autoUpdating, setAutoUpdating] = useState(false);
+    const [firstServer, setFirstServer] = useState<"a" | "b">("a");
     const [viewPlayer, setViewPlayer] = useState<"a" | "b">("a");
     const [probHistory, setProbHistory] = useState<ProbPoint[]>([]);
     const [urlA, setUrlA] = useState("");
@@ -66,7 +67,7 @@ export default function SimulatorPage() {
             setPB(result.p_b_updated);
             if (result.match_stats) setStatsHistory([result.match_stats]);
             setSimulating(true);
-            const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, 100000);
+            const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000);
             setSimResult(sim);
             setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob }]);
         } catch (err) {
@@ -83,7 +84,7 @@ export default function SimulatorPage() {
         if (lookup) {
             setSimulating(true);
             try {
-                const sim = await runSimulation(newPA, newPB, lookup.current_score, 100000);
+                const sim = await runSimulation(newPA, newPB, lookup.current_score, firstServer, 100000);
                 setSimResult(sim);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Simulation failed");
@@ -97,7 +98,7 @@ export default function SimulatorPage() {
         if (!lookup?.match_url) return;
         try {
             const update = await fetchMatchUpdate(
-                lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory
+                lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory, firstServer
             );
             if (update.error) return;
             if (update.match_stats) {
@@ -250,7 +251,7 @@ export default function SimulatorPage() {
                                 }
                                 // Re-run simulation with new p values
                                 if (lookup) {
-                                    const sim = await runSimulation(pA, pB, lookup.current_score, 100000);
+                                    const sim = await runSimulation(pA, pB, lookup.current_score, firstServer, 100000);
                                     setSimResult(sim);
                                 }
                             } catch (err) {
@@ -266,9 +267,45 @@ export default function SimulatorPage() {
                 </div>
             )}
 
-            {/* Player perspective selector */}
+            {/* First server + Player perspective selector */}
             {lookup && (
-                <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ marginTop: 16, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontWeight: 600 }}>First server:</span>
+                        <button
+                            onClick={async () => {
+                                setFirstServer("a");
+                                if (lookup && simResult) {
+                                    const sim = await runSimulation(pA, pB, lookup.current_score, "a", 100000);
+                                    setSimResult(sim);
+                                }
+                            }}
+                            style={{
+                                padding: "4px 12px", border: "1px solid #888", borderRadius: 4, cursor: "pointer",
+                                background: firstServer === "a" ? "#555" : "white",
+                                color: firstServer === "a" ? "white" : "#555", fontSize: 13,
+                            }}
+                        >
+                            {lookup.player_a.split(" ").pop()}
+                        </button>
+                        <button
+                            onClick={async () => {
+                                setFirstServer("b");
+                                if (lookup && simResult) {
+                                    const sim = await runSimulation(pA, pB, lookup.current_score, "b", 100000);
+                                    setSimResult(sim);
+                                }
+                            }}
+                            style={{
+                                padding: "4px 12px", border: "1px solid #888", borderRadius: 4, cursor: "pointer",
+                                background: firstServer === "b" ? "#555" : "white",
+                                color: firstServer === "b" ? "white" : "#555", fontSize: 13,
+                            }}
+                        >
+                            {lookup.player_b.split(" ").pop()}
+                        </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span style={{ fontWeight: 600 }}>View perspective:</span>
                     <button
                         onClick={() => setViewPlayer("a")}
@@ -290,6 +327,7 @@ export default function SimulatorPage() {
                     >
                         {lookup.player_b.split(" ").pop()}
                     </button>
+                    </div>
                 </div>
             )}
 
