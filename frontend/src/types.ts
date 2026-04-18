@@ -90,6 +90,7 @@ export interface SimulateResult {
 
 export interface MatchUpdateResult {
     changed?: boolean;
+    stale_count?: number;
     current_win_prob: number;
     current_score: ScoreState;
     total_points: number;

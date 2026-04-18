@@ -45,6 +45,7 @@ export default function SimulatorPage() {
     const [urlB, setUrlB] = useState("");
     const [rescraping, setRescraping] = useState(false);
     const [statsHistory, setStatsHistory] = useState<Record<string, number>[]>([]);
+    const [staleCount, setStaleCount] = useState(0);
     const [simTab, setSimTab] = useState<"timeslice" | "maxprob">("timeslice");
     const [maxResult, setMaxResult] = useState<(QueryResponse & { current_win_prob: number }) | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -105,10 +106,14 @@ export default function SimulatorPage() {
         try {
             const update = await fetchMatchUpdate(
                 lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory, firstServer,
-                lookup.current_score
+                lookup.current_score, staleCount
             );
             if (update.error) return;
-            if (!update.changed) return; // Score unchanged, skip
+            if (!update.changed) {
+                setStaleCount(update.stale_count ?? staleCount + 1);
+                return;
+            }
+            setStaleCount(0);
             if (update.match_stats) {
                 setStatsHistory(prev => [...prev, update.match_stats!]);
             }
@@ -160,7 +165,7 @@ export default function SimulatorPage() {
             setAutoUpdating(false);
         } else {
             doAutoUpdate();
-            intervalRef.current = setInterval(doAutoUpdate, 10000);
+            intervalRef.current = setInterval(doAutoUpdate, 5000);
             setAutoUpdating(true);
         }
     };

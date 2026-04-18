@@ -246,13 +246,6 @@ async def match_update(req: dict):
     if not match_page:
         return {"error": "Match page not found. Please look up the match again."}
 
-    # Reload page to get fresh data (FlashScore WebSocket may not work in headless)
-    try:
-        await match_page.reload(timeout=10000)
-        await match_page.wait_for_timeout(2000)
-    except Exception as e:
-        logger.warning(f"Page reload failed: {e}")
-
     score_data = await read_match_score(match_page)
     if not score_data:
         return {"error": "Could not read match score"}
@@ -264,9 +257,25 @@ async def match_update(req: dict):
         "serving": score_data["serving"],
     }
 
-    # Skip full computation if score hasn't changed
+    # If score unchanged, try reloading page once (WebSocket may have dropped)
+    stale_count = req.get("stale_count", 0)
     if prev_score and score == prev_score:
-        return {"changed": False, "current_score": score}
+        if stale_count >= 3:
+            try:
+                await match_page.reload(timeout=10000)
+                await match_page.wait_for_timeout(2000)
+                score_data = await read_match_score(match_page)
+                if score_data:
+                    score = {
+                        "sets": score_data["sets"],
+                        "games": score_data["games"],
+                        "points": score_data["points"],
+                        "serving": score_data["serving"],
+                    }
+            except Exception as e:
+                logger.warning(f"Stale reload failed: {e}")
+        if prev_score and score == prev_score:
+            return {"changed": False, "current_score": score, "stale_count": stale_count + 1}
 
     stats = await read_match_stats(match_page)
 
