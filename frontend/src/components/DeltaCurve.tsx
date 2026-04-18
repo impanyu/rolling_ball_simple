@@ -50,6 +50,19 @@ export default function DeltaCurve({ histogram, currentProb, playerName }: Props
         });
     }
 
+    // Expected profit for each positive delta:
+    // E[profit] = P(success) * delta - P(failure) * currentProb
+    // where P(success) = upperTail / 100
+    const evData = chartData
+        .filter(d => d.delta > 0)
+        .map(d => {
+            const pSuccess = d.upperTail / 100;
+            const ev = pSuccess * d.delta - (1 - pSuccess) * currentProb;
+            return { delta: d.delta, ev: Math.round(ev * 100) / 100, pSuccess: d.upperTail };
+        });
+
+    const bestEv = evData.length > 0 ? evData.reduce((best, d) => d.ev > best.ev ? d : best, evData[0]) : null;
+
     return (
         <div style={{ padding: 20, border: "1px solid #ddd", borderRadius: 8 }}>
             <h3 style={{ marginTop: 0 }}>
@@ -88,6 +101,53 @@ export default function DeltaCurve({ histogram, currentProb, playerName }: Props
                     />
                 </AreaChart>
             </ResponsiveContainer>
+
+            {/* Expected profit table */}
+            <div style={{ marginTop: 16 }}>
+                <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>
+                    E[Profit] — Buy at current ({currentProb.toFixed(1)}¢), sell at target
+                </h4>
+                <div style={{ overflowX: "auto" }}>
+                    <table style={{ fontSize: 13, borderCollapse: "collapse", width: "100%" }}>
+                        <thead>
+                            <tr style={{ borderBottom: "2px solid #ddd" }}>
+                                <th style={{ padding: "4px 8px", textAlign: "center" }}>Target Δ</th>
+                                {evData.map(d => (
+                                    <th key={d.delta} style={{
+                                        padding: "4px 8px", textAlign: "center",
+                                        background: bestEv && d.delta === bestEv.delta ? "#e8f8e8" : undefined,
+                                    }}>+{d.delta}%</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style={{ borderBottom: "1px solid #eee" }}>
+                                <td style={{ padding: "4px 8px", fontWeight: 600 }}>P(reach)</td>
+                                {evData.map(d => (
+                                    <td key={d.delta} style={{ padding: "4px 8px", textAlign: "center" }}>{d.pSuccess.toFixed(1)}%</td>
+                                ))}
+                            </tr>
+                            <tr>
+                                <td style={{ padding: "4px 8px", fontWeight: 600 }}>E[profit]</td>
+                                {evData.map(d => (
+                                    <td key={d.delta} style={{
+                                        padding: "4px 8px", textAlign: "center", fontWeight: 600,
+                                        color: d.ev >= 0 ? "#27ae60" : "#e74c3c",
+                                        background: bestEv && d.delta === bestEv.delta ? "#e8f8e8" : undefined,
+                                    }}>
+                                        {d.ev >= 0 ? "+" : ""}{d.ev.toFixed(2)}
+                                    </td>
+                                ))}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                {bestEv && bestEv.ev > 0 && (
+                    <p style={{ marginTop: 8, fontSize: 13, color: "#27ae60" }}>
+                        <strong>Best target: +{bestEv.delta}%</strong> (E[profit] = +{bestEv.ev.toFixed(2)}, P(reach) = {bestEv.pSuccess.toFixed(1)}%)
+                    </p>
+                )}
+            </div>
         </div>
     );
 }
