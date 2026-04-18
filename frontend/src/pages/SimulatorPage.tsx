@@ -4,7 +4,7 @@ import MatchStatus from "../components/MatchStatus";
 import Histogram from "../components/Histogram";
 import WinProbChart from "../components/WinProbChart";
 import DeltaCurve from "../components/DeltaCurve";
-import { lookupMatch, runSimulation, runSimulateMax, fetchMatchUpdate, rescrapePlayer } from "../api";
+import { lookupMatch, runSimulation, fetchMatchUpdate, rescrapePlayer } from "../api";
 import type { LookupResult, SimulateResult, QueryResponse, HistogramBin } from "../types";
 
 function flipHistogram(histogram: HistogramBin[]): HistogramBin[] {
@@ -93,12 +93,9 @@ export default function SimulatorPage() {
             setPB(result.p_b_updated);
             if (result.match_stats) setStatsHistory([result.match_stats]);
             setSimulating(true);
-            const [sim, maxSim] = await Promise.all([
-                runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000),
-                runSimulateMax(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000),
-            ]);
+            const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000);
             setSimResult(sim);
-            setMaxResult(maxSim);
+            setMaxResult({ current_win_prob: sim.current_win_prob, ...sim.max_prob });
             setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob }]);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Lookup failed");
@@ -148,19 +145,14 @@ export default function SimulatorPage() {
             } : prev);
             setPA(update.p_a_updated);
             setPB(update.p_b_updated);
-            if (simTab === "maxprob") {
-                setMaxResult({
-                    current_win_prob: update.current_win_prob,
-                    total_count: update.total_count ?? 0,
-                    histogram: update.histogram ?? [],
-                    stats: update.stats ?? { mean: 0, median: 0, std: 0 },
-                });
-            } else {
-                setSimResult({
-                    current_win_prob: update.current_win_prob,
-                    slices: update.slices!,
-                    combined: update.combined!,
-                });
+            setSimResult({
+                current_win_prob: update.current_win_prob,
+                slices: update.slices!,
+                combined: update.combined!,
+                max_prob: update.max_prob!,
+            });
+            if (update.max_prob) {
+                setMaxResult({ current_win_prob: update.current_win_prob, ...update.max_prob });
             }
             setProbHistory(prev => {
                 const tp = update.total_points;

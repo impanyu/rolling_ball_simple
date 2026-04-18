@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter
 
 from app.tennis.engine import MatchState, build_win_prob_table
-from app.tennis.simulator import simulate_time_slices, simulate_max_prob, win_prob_at_state
+from app.tennis.simulator import simulate_combined, win_prob_at_state
 from app.tennis.bayesian import update_serve_components, multi_scale_p
 
 logger = logging.getLogger(__name__)
@@ -113,18 +113,9 @@ async def simulate(req: SimulateRequest):
     if prob < 0.01 and not state.is_terminal():
         logger.error(f"SUSPICIOUS 0% prob for non-terminal state! score={req.score}")
 
-    result = simulate_time_slices(
+    result = simulate_combined(
         state, req.p_a, req.p_b, table, req.num_simulations
     )
-    return result
-
-
-@router.post("/api/simulate-max")
-async def simulate_max(req: SimulateRequest):
-    """Simulate paths up to 100 points, return max P(win) histogram."""
-    state = score_to_match_state(req.score, req.first_server)
-    table = build_win_prob_table(req.p_a, req.p_b)
-    result = simulate_max_prob(state, req.p_a, req.p_b, table, req.num_simulations)
     return result
 
 
@@ -291,15 +282,9 @@ async def _do_match_update(req: dict):
         f"p_b={p_b:.4f} (far={serve_b_updated.get('p_far')}, window={serve_b_updated.get('window_size')})"
     )
 
-    # Run simulation based on requested mode
-    sim_mode = req.get("sim_mode", "timeslice")
     state = score_to_match_state(ScoreInput(**score), first_server)
     table = build_win_prob_table(p_a, p_b)
-
-    if sim_mode == "maxprob":
-        sim_result = simulate_max_prob(state, p_a, p_b, table, num_simulations)
-    else:
-        sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
+    sim_result = simulate_combined(state, p_a, p_b, table, num_simulations)
 
     total_points = 0
     if stats:

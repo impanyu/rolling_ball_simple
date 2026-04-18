@@ -85,6 +85,11 @@ export interface SimulateResult {
         histogram: HistogramBin[];
         stats: Stats;
     };
+    max_prob: {
+        total_count: number;
+        histogram: HistogramBin[];
+        stats: Stats;
+    };
 }
 
 export interface MatchUpdateResult {
@@ -105,9 +110,10 @@ export interface MatchUpdateResult {
         histogram: HistogramBin[];
         stats: Stats;
     };
-    // Max prob mode
-    total_count?: number;
-    histogram?: HistogramBin[];
-    stats?: Stats;
+    max_prob?: {
+        total_count: number;
+        histogram: HistogramBin[];
+        stats: Stats;
+    };
     error?: string;
 }

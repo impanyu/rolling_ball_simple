@@ -150,51 +150,7 @@ def _simulate_one_path(
 
 
 MAX_PATH_POINTS = 100
-
-
-def simulate_max_prob(
-    start_state: MatchState,
-    p_a: float,
-    p_b: float,
-    table: Dict[Tuple, float],
-    n_simulations: int = 100_000,
-    max_points: int = MAX_PATH_POINTS,
-) -> dict:
-    """Simulate paths up to max_points, record the max P(A wins) per path."""
-    rng = random.Random()
-    current_win_prob = win_prob_at_state(start_state, table, p_a, p_b) * 100.0
-
-    max_probs: List[float] = []
-    for _ in range(n_simulations):
-        state = start_state
-        path_max = win_prob_at_state(state, table, p_a, p_b)
-
-        for _ in range(max_points):
-            if state.is_terminal():
-                terminal_prob = 1.0 if state.sets_a == 2 else 0.0
-                if terminal_prob > path_max:
-                    path_max = terminal_prob
-                break
-
-            p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
-            a_wins_point = rng.random() < p_a_point
-            state = next_state(state, a_wins_point)
-
-            prob = win_prob_at_state(state, table, p_a, p_b) if not state.is_terminal() else (1.0 if state.sets_a == 2 else 0.0)
-            if prob > path_max:
-                path_max = prob
-
-        max_probs.append(path_max * 100.0)
-
-    return {
-        "current_win_prob": round(current_win_prob, 2),
-        "total_count": n_simulations,
-        "histogram": _build_histogram(max_probs),
-        "stats": _compute_stats(max_probs),
-    }
-
-
-HORIZON_POINTS = [10, 20, 30, 50, 80]
+HORIZON_POINTS = [10, 20, 30, 50, 80, 100]
 HORIZON_WEIGHTS = {n: 1.0 / n for n in HORIZON_POINTS}
 
 
@@ -227,67 +183,73 @@ def _compute_stats(values_pct: List[float]) -> dict:
     }
 
 
-def simulate_time_slices(
+def simulate_combined(
     start_state: MatchState,
     p_a: float,
     p_b: float,
     table: Dict[Tuple, float],
     n_simulations: int = 100_000,
+    max_points: int = MAX_PATH_POINTS,
     horizons: List[int] | None = None,
 ) -> dict:
-    """Simulate paths and collect P(A wins) at specific point horizons.
+    """Unified simulation: collects time-slice snapshots AND max prob in one pass.
 
-    For each horizon N, record the P(A wins) after N points (or at match end
-    if the match finishes before N points). Returns per-horizon histograms
-    plus a weighted combined histogram (weight = 1/N).
+    Each path simulates up to max_points (default 100). Along the way:
+    - Records P(A wins) at each horizon point (10, 20, 30, 50, 80)
+    - Tracks the maximum P(A wins) encountered on the path
     """
     if horizons is None:
         horizons = HORIZON_POINTS
 
     rng = random.Random()
     current_win_prob = win_prob_at_state(start_state, table, p_a, p_b) * 100.0
-    max_horizon = max(horizons)
 
-    # For each horizon, collect endpoint probabilities
     horizon_values: Dict[int, List[float]] = {h: [] for h in horizons}
+    max_probs: List[float] = []
+    horizon_set = set(horizons)
 
-    for _ in range(n_simulations):
+    for sim_idx in range(n_simulations):
         state = start_state
-        for point_idx in range(1, max_horizon + 1):
+        path_max = win_prob_at_state(state, table, p_a, p_b)
+        recorded_horizons: set[int] = set()
+
+        for point_idx in range(1, max_points + 1):
             if state.is_terminal():
-                # Match ended — record terminal probability for all remaining horizons
-                terminal_prob = 100.0 if state.sets_a == 2 else 0.0
+                terminal_prob = 1.0 if state.sets_a == 2 else 0.0
+                if terminal_prob > path_max:
+                    path_max = terminal_prob
+                # Fill remaining horizons with terminal prob
                 for h in horizons:
-                    if h >= point_idx and len(horizon_values[h]) < _ + 1:
-                        horizon_values[h].append(terminal_prob)
+                    if h not in recorded_horizons:
+                        horizon_values[h].append(terminal_prob * 100.0)
+                        recorded_horizons.add(h)
                 break
 
-            if state.is_tiebreak:
-                p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
-            else:
-                p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
-
+            p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
             a_wins_point = rng.random() < p_a_point
             state = next_state(state, a_wins_point)
 
-            if point_idx in horizons:
-                if state.is_terminal():
-                    prob = 100.0 if state.sets_a == 2 else 0.0
-                else:
-                    prob = win_prob_at_state(state, table, p_a, p_b) * 100.0
-                horizon_values[point_idx].append(prob)
+            if state.is_terminal():
+                prob = 1.0 if state.sets_a == 2 else 0.0
+            else:
+                prob = win_prob_at_state(state, table, p_a, p_b)
 
-        # If match didn't end and we reached max_horizon, fill any horizons
-        # that weren't hit (match still going at that point)
+            if prob > path_max:
+                path_max = prob
+
+            if point_idx in horizon_set and point_idx not in recorded_horizons:
+                horizon_values[point_idx].append(prob * 100.0)
+                recorded_horizons.add(point_idx)
+
+        # Fill any horizons beyond max_points that weren't reached
         for h in horizons:
-            if len(horizon_values[h]) <= _:
-                if state.is_terminal():
-                    prob = 100.0 if state.sets_a == 2 else 0.0
-                else:
-                    prob = win_prob_at_state(state, table, p_a, p_b) * 100.0
-                horizon_values[h].append(prob)
+            if h not in recorded_horizons:
+                final_prob = (1.0 if state.sets_a == 2 else 0.0) if state.is_terminal() else win_prob_at_state(state, table, p_a, p_b)
+                horizon_values[h].append(final_prob * 100.0)
 
-    # Build per-horizon results
+        max_probs.append(path_max * 100.0)
+
+    # Build time-slice results
     slices = []
     for h in horizons:
         vals = horizon_values[h]
@@ -308,16 +270,10 @@ def simulate_time_slices(
             combined_bins[i] += b["percentage"] * w
 
     combined_histogram = [
-        {
-            "bin_start": i * 5.0,
-            "bin_end": (i + 1) * 5.0,
-            "count": 0,
-            "percentage": round(combined_bins[i], 2),
-        }
+        {"bin_start": i * 5.0, "bin_end": (i + 1) * 5.0, "count": 0, "percentage": round(combined_bins[i], 2)}
         for i in range(20)
     ]
 
-    # Weighted stats
     all_weighted: List[float] = []
     for h in horizons:
         w = HORIZON_WEIGHTS.get(h, 1.0 / h) / weight_sum
@@ -332,7 +288,21 @@ def simulate_time_slices(
             "histogram": combined_histogram,
             "stats": _compute_stats(all_weighted) if all_weighted else {"mean": 0, "median": 0, "std": 0},
         },
+        "max_prob": {
+            "total_count": n_simulations,
+            "histogram": _build_histogram(max_probs),
+            "stats": _compute_stats(max_probs),
+        },
     }
+
+
+# Keep backward compatibility
+def simulate_time_slices(*args, **kwargs):
+    return simulate_combined(*args, **kwargs)
+
+
+def simulate_max_prob(*args, **kwargs):
+    return simulate_combined(*args, **kwargs)
 
 
 def simulate_max_prob_distribution(
