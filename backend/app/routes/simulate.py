@@ -285,8 +285,8 @@ async def _do_match_update(req: dict):
     p_b = serve_b_updated.get("p_serve", serve_b_prior.get("p_serve", 0.64))
 
     logger.info(
-        f"MATCH-UPDATE: p_a={p_a:.4f} (far={serve_a_updated.get('p_far')}, mid={serve_a_updated.get('p_mid')}, near={serve_a_updated.get('p_near')}) "
-        f"p_b={p_b:.4f} (far={serve_b_updated.get('p_far')}, mid={serve_b_updated.get('p_mid')}, near={serve_b_updated.get('p_near')})"
+        f"MATCH-UPDATE: p_a={p_a:.4f} (far={serve_a_updated.get('p_far')}, window={serve_a_updated.get('window_size')}) "
+        f"p_b={p_b:.4f} (far={serve_b_updated.get('p_far')}, window={serve_b_updated.get('window_size')})"
     )
 
     state = score_to_match_state(ScoreInput(**score), first_server)
