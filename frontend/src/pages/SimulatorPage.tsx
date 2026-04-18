@@ -93,7 +93,7 @@ export default function SimulatorPage() {
             setPB(result.p_b_updated);
             if (result.match_stats) setStatsHistory([result.match_stats]);
             setSimulating(true);
-            const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000);
+            const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 20000);
             setSimResult(sim);
             setMaxResult({ current_win_prob: sim.current_win_prob, max_prob_a: sim.max_prob_a, min_prob_a: sim.min_prob_a });
             setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob }]);
@@ -111,7 +111,7 @@ export default function SimulatorPage() {
         if (lookup) {
             setSimulating(true);
             try {
-                const sim = await runSimulation(newPA, newPB, lookup.current_score, firstServer, 100000);
+                const sim = await runSimulation(newPA, newPB, lookup.current_score, firstServer, 20000);
                 setSimResult(sim);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Simulation failed");
@@ -288,7 +288,7 @@ export default function SimulatorPage() {
                                 }
                                 // Re-run simulation with new p values
                                 if (lookup) {
-                                    const sim = await runSimulation(pA, pB, lookup.current_score, firstServer, 100000);
+                                    const sim = await runSimulation(pA, pB, lookup.current_score, firstServer, 20000);
                                     setSimResult(sim);
                                 }
                             } catch (err) {
@@ -313,7 +313,7 @@ export default function SimulatorPage() {
                             onClick={async () => {
                                 setFirstServer("a");
                                 if (lookup && simResult) {
-                                    const sim = await runSimulation(pA, pB, lookup.current_score, "a", 100000);
+                                    const sim = await runSimulation(pA, pB, lookup.current_score, "a", 20000);
                                     setSimResult(sim);
                                 }
                             }}
@@ -329,7 +329,7 @@ export default function SimulatorPage() {
                             onClick={async () => {
                                 setFirstServer("b");
                                 if (lookup && simResult) {
-                                    const sim = await runSimulation(pA, pB, lookup.current_score, "b", 100000);
+                                    const sim = await runSimulation(pA, pB, lookup.current_score, "b", 20000);
                                     setSimResult(sim);
                                 }
                             }}
