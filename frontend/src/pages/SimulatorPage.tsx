@@ -29,26 +29,49 @@ interface ProbPoint {
     prob: number;
 }
 
+// Session storage helpers
+function loadSession<T>(key: string, fallback: T): T {
+    try {
+        const v = sessionStorage.getItem(`sim_${key}`);
+        return v ? JSON.parse(v) : fallback;
+    } catch { return fallback; }
+}
+function saveSession(key: string, value: unknown) {
+    try { sessionStorage.setItem(`sim_${key}`, JSON.stringify(value)); } catch {}
+}
+
 export default function SimulatorPage() {
-    const [lookup, setLookup] = useState<LookupResult | null>(null);
-    const [simResult, setSimResult] = useState<SimulateResult | null>(null);
+    const [lookup, setLookup] = useState<LookupResult | null>(() => loadSession("lookup", null));
+    const [simResult, setSimResult] = useState<SimulateResult | null>(() => loadSession("simResult", null));
     const [loading, setLoading] = useState(false);
     const [simulating, setSimulating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [pA, setPA] = useState(0.64);
-    const [pB, setPB] = useState(0.64);
+    const [pA, setPA] = useState(() => loadSession("pA", 0.64));
+    const [pB, setPB] = useState(() => loadSession("pB", 0.64));
     const [autoUpdating, setAutoUpdating] = useState(false);
-    const [firstServer, setFirstServer] = useState<"a" | "b">("a");
-    const [viewPlayer, setViewPlayer] = useState<"a" | "b">("a");
-    const [probHistory, setProbHistory] = useState<ProbPoint[]>([]);
+    const [firstServer, setFirstServer] = useState<"a" | "b">(() => loadSession("firstServer", "a"));
+    const [viewPlayer, setViewPlayer] = useState<"a" | "b">(() => loadSession("viewPlayer", "a"));
+    const [probHistory, setProbHistory] = useState<ProbPoint[]>(() => loadSession("probHistory", []));
     const [urlA, setUrlA] = useState("");
     const [urlB, setUrlB] = useState("");
     const [rescraping, setRescraping] = useState(false);
-    const [statsHistory, setStatsHistory] = useState<Record<string, number>[]>([]);
+    const [statsHistory, setStatsHistory] = useState<Record<string, number>[]>(() => loadSession("statsHistory", []));
     const [staleCount, setStaleCount] = useState(0);
-    const [simTab, setSimTab] = useState<"timeslice" | "maxprob">("timeslice");
-    const [maxResult, setMaxResult] = useState<(QueryResponse & { current_win_prob: number }) | null>(null);
+    const [simTab, setSimTab] = useState<"timeslice" | "maxprob">(() => loadSession("simTab", "timeslice"));
+    const [maxResult, setMaxResult] = useState<(QueryResponse & { current_win_prob: number }) | null>(() => loadSession("maxResult", null));
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Persist key state to sessionStorage
+    useEffect(() => { saveSession("lookup", lookup); }, [lookup]);
+    useEffect(() => { saveSession("simResult", simResult); }, [simResult]);
+    useEffect(() => { saveSession("maxResult", maxResult); }, [maxResult]);
+    useEffect(() => { saveSession("pA", pA); }, [pA]);
+    useEffect(() => { saveSession("pB", pB); }, [pB]);
+    useEffect(() => { saveSession("firstServer", firstServer); }, [firstServer]);
+    useEffect(() => { saveSession("viewPlayer", viewPlayer); }, [viewPlayer]);
+    useEffect(() => { saveSession("probHistory", probHistory); }, [probHistory]);
+    useEffect(() => { saveSession("statsHistory", statsHistory); }, [statsHistory]);
+    useEffect(() => { saveSession("simTab", simTab); }, [simTab]);
 
     const handleLookup = async (input: string) => {
         // Stop any running auto-update from previous match
