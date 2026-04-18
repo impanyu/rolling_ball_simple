@@ -71,7 +71,7 @@ export async function fetchMatchUpdate(
     statsHistory: Record<string, number>[],
     firstServer: string = "a",
     prevScore: ScoreState | null = null,
-    staleCount: number = 0,
+    simMode: string = "timeslice",
     num_simulations: number = 100000
 ): Promise<MatchUpdateResult> {
     const resp = await fetch("/api/match-update", {
@@ -84,7 +84,7 @@ export async function fetchMatchUpdate(
             stats_history: statsHistory,
             first_server: firstServer,
             prev_score: prevScore,
-            stale_count: staleCount,
+            sim_mode: simMode,
             num_simulations,
         }),
     });

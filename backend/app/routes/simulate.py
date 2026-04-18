@@ -291,9 +291,15 @@ async def _do_match_update(req: dict):
         f"p_b={p_b:.4f} (far={serve_b_updated.get('p_far')}, window={serve_b_updated.get('window_size')})"
     )
 
+    # Run simulation based on requested mode
+    sim_mode = req.get("sim_mode", "timeslice")
     state = score_to_match_state(ScoreInput(**score), first_server)
     table = build_win_prob_table(p_a, p_b)
-    sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
+
+    if sim_mode == "maxprob":
+        sim_result = simulate_max_prob(state, p_a, p_b, table, num_simulations)
+    else:
+        sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
 
     total_points = 0
     if stats:

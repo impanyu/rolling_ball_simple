@@ -98,11 +98,16 @@ export interface MatchUpdateResult {
     serve_a_updated?: ServeComponents;
     serve_b_updated?: ServeComponents;
     match_stats: Record<string, number> | null;
-    slices: TimeSlice[];
-    combined: {
+    // Time slices mode
+    slices?: TimeSlice[];
+    combined?: {
         total_count: number;
         histogram: HistogramBin[];
         stats: Stats;
     };
+    // Max prob mode
+    total_count?: number;
+    histogram?: HistogramBin[];
+    stats?: Stats;
     error?: string;
 }

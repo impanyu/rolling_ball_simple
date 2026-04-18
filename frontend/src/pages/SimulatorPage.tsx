@@ -131,7 +131,7 @@ export default function SimulatorPage() {
         try {
             const update = await fetchMatchUpdate(
                 lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory, firstServer,
-                lookup.current_score
+                lookup.current_score, simTab
             );
             if (update.error) return;
             if (!update.changed) return;
@@ -148,15 +148,19 @@ export default function SimulatorPage() {
             } : prev);
             setPA(update.p_a_updated);
             setPB(update.p_b_updated);
-            setSimResult({
-                current_win_prob: update.current_win_prob,
-                slices: update.slices,
-                combined: update.combined,
-            });
-            // Also update max prob simulation
-            if (lookup) {
-                const maxSim = await runSimulateMax(update.p_a_updated, update.p_b_updated, update.current_score, firstServer, 100000);
-                setMaxResult(maxSim);
+            if (simTab === "maxprob") {
+                setMaxResult({
+                    current_win_prob: update.current_win_prob,
+                    total_count: update.total_count ?? 0,
+                    histogram: update.histogram ?? [],
+                    stats: update.stats ?? { mean: 0, median: 0, std: 0 },
+                });
+            } else {
+                setSimResult({
+                    current_win_prob: update.current_win_prob,
+                    slices: update.slices!,
+                    combined: update.combined!,
+                });
             }
             setProbHistory(prev => {
                 const tp = update.total_points;
