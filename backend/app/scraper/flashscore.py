@@ -369,6 +369,14 @@ async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | No
     logger.info(f"Matching parts: A={a_parts}, B={b_parts}")
 
     browser = await get_browser()
+
+    # Close old match tabs before opening a new one
+    if browser.contexts:
+        for old_page in browser.contexts[0].pages:
+            if "/game/tennis/" in old_page.url:
+                logger.info(f"Closing old match tab: {old_page.url[:80]}")
+                await old_page.close()
+
     page = await browser.new_page()
     try:
         await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
