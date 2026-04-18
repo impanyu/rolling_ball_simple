@@ -61,6 +61,8 @@ export default function SimulatorPage() {
         try {
             const result = await lookupMatch(input);
             if (result.error) { setError(result.error); return; }
+            console.log("LOOKUP prior A:", result.serve_a_prior);
+            console.log("LOOKUP updated A:", result.serve_a_updated);
             setLookup(result);
             setPA(result.p_a_updated);
             setPB(result.p_b_updated);
