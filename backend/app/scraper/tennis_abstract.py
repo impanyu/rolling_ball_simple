@@ -1,5 +1,6 @@
 import logging
 import re
+import datetime
 from app.scraper.browser import get_browser
 
 logger = logging.getLogger(__name__)
@@ -37,14 +38,8 @@ def _parse_stat_block(text: str, label: str) -> dict | None:
 def parse_serve_stats_from_text(
     text: str, surface: str | None = None, opponent_rank: int | None = None
 ) -> dict | None:
-    """Parse serve stats, adjusting for surface and opponent strength.
-    Priority: current season > Last 52 > Career.
-    If opponent_rank <= 50, blend with 'vs Top 10' stats.
-    """
-    import datetime
     current_year = str(datetime.date.today().year)
 
-    # Try current season first, then Last 52, then Career
     base = _parse_stat_block(text, current_year)
     if base:
         logger.info(f"Using {current_year} season stats")
@@ -63,14 +58,13 @@ def parse_serve_stats_from_text(
     if not base:
         return None
 
-    # Adjust for opponent strength if ranking is available
     if opponent_rank and opponent_rank <= 50:
         top10_stats = _parse_stat_block(text, "vs Top 10")
         if top10_stats:
             if opponent_rank <= 10:
                 weight = 1.0
             else:
-                weight = (50 - opponent_rank) / 40.0  # linear: rank 10→1.0, rank 50→0.0
+                weight = (50 - opponent_rank) / 40.0
 
             for key in ["first_in", "first_won", "second_won"]:
                 base[key] = round(base[key] * (1 - weight) + top10_stats[key] * weight, 4)
@@ -82,30 +76,27 @@ def parse_serve_stats_from_text(
     return base
 
 
-def _generate_name_variants(player_name: str) -> list[str]:
-    """Generate multiple URL name variants to try on Tennis Abstract.
-    E.g. 'Carlos Juan Angelo Prado' -> [
-        'CarlosJuanAngeloPrado',  # full name
-        'CarlosPrado',            # first + last
-        'AngeloPrado',            # last-first-name + last
-        'CJAPrado',               # initials + last
-    ]
-    """
-    parts = player_name.strip().split()
-    if len(parts) <= 1:
-        return [player_name.replace(" ", "")]
+def _search_player_url_name(player_name: str, gender: str = "wta") -> str | None:
+    """Use DuckDuckGo to find the correct Tennis Abstract URL name for a player."""
+    try:
+        from ddgs import DDGS
+        prefix = "w" if gender == "wta" else ""
 
-    variants = []
-    # Full name (no spaces)
-    variants.append("".join(parts))
-
-    if len(parts) > 2:
-        # First + Last
-        variants.append(parts[0] + parts[-1])
-        # Second-to-last + Last (some players go by middle name)
-        variants.append(parts[-2] + parts[-1])
-
-    return variants
+        for query in [
+            f"site:tennisabstract.com/cgi-bin/{prefix}player {player_name}",
+            f"tennisabstract.com {player_name} serve stats",
+        ]:
+            results = list(DDGS().text(query, max_results=5))
+            for r in results:
+                href = r.get("href", "")
+                m = re.search(r'tennisabstract\.com/cgi-bin/\w*player[^?]*\?p=(\w+)', href)
+                if m:
+                    url_name = m.group(1)
+                    logger.info(f"DDG found Tennis Abstract name for '{player_name}': {url_name}")
+                    return url_name
+    except Exception as e:
+        logger.warning(f"DDG search failed for {player_name}: {e}")
+    return None
 
 
 async def scrape_player_serve_stats(
@@ -113,57 +104,45 @@ async def scrape_player_serve_stats(
     opponent_rank: int | None = None,
 ) -> dict:
     """Scrape player's serve components from Tennis Abstract.
-    Adjusts for surface and opponent ranking. Tries multiple name variants.
+    Uses DuckDuckGo to find the correct player page, then scrapes it.
     """
     prefix = "w" if gender == "wta" else ""
     defaults = DEFAULTS_WTA if gender == "wta" else DEFAULTS_ATP
-
-    variants = _generate_name_variants(player_name)
-
-    browser = await get_browser()
-
-    import datetime
     current_year = str(datetime.date.today().year)
 
-    for variant in variants:
-        # Use current season filter — page also includes Last 52, vs Top 10, surface breakdowns
-        url = f"https://www.tennisabstract.com/cgi-bin/{prefix}player-classic.cgi?p={variant}&f=A{current_year}qq"
-        try:
-            page = await browser.new_page()
-            await page.goto(url, timeout=15000)
-            await page.wait_for_timeout(3000)
-            text = await page.text_content("body") or ""
-            await page.close()
+    # Step 1: Find the correct URL name via DuckDuckGo
+    url_name = _search_player_url_name(player_name, gender)
 
-            result = parse_serve_stats_from_text(text, surface, opponent_rank)
-            if result:
-                surface_label = surface or "overall"
-                logger.info(f"Got serve stats for {player_name} as '{variant}' ({surface_label}, vs rank {opponent_rank}): fi={result['first_in']}, fw={result['first_won']}, sw={result['second_won']}, p={result['p_serve']}")
-                return result
+    # Fallback: try simple concatenation
+    if not url_name:
+        url_name = player_name.replace(" ", "")
+        # Also try with alt gender
+        alt_name = _search_player_url_name(player_name, "atp" if gender == "wta" else "wta")
+        if alt_name:
+            url_name = alt_name
+            prefix = "" if gender == "wta" else "w"
 
-        except Exception as e:
-            logger.debug(f"Failed variant '{variant}' for {player_name}: {e}")
-            continue
+    # Step 2: Scrape the page
+    url = f"https://www.tennisabstract.com/cgi-bin/{prefix}player-classic.cgi?p={url_name}&f=A{current_year}qq"
 
-    # Also try without gender prefix
-    alt_prefix = "" if prefix == "w" else "w"
-    for variant in variants[:1]:
-        url = f"https://www.tennisabstract.com/cgi-bin/{alt_prefix}player-classic.cgi?p={variant}&f=A{current_year}qq"
-        try:
-            page = await browser.new_page()
-            await page.goto(url, timeout=15000)
-            await page.wait_for_timeout(3000)
-            text = await page.text_content("body") or ""
-            await page.close()
+    try:
+        browser = await get_browser()
+        page = await browser.new_page()
+        await page.goto(url, timeout=15000)
+        await page.wait_for_timeout(3000)
+        text = await page.text_content("body") or ""
+        await page.close()
 
-            result = parse_serve_stats_from_text(text, surface, opponent_rank)
-            if result:
-                logger.info(f"Got serve stats for {player_name} using alt gender prefix")
-                return result
-        except Exception:
-            pass
+        result = parse_serve_stats_from_text(text, surface, opponent_rank)
+        if result:
+            surface_label = surface or "overall"
+            logger.info(f"Got serve stats for {player_name} as '{url_name}' ({surface_label}, vs rank {opponent_rank}): p={result['p_serve']}")
+            return result
 
-    logger.warning(f"Could not parse stats for {player_name} (tried {variants}), using defaults")
+    except Exception as e:
+        logger.error(f"Failed to scrape {player_name}: {e}")
+
+    logger.warning(f"Could not parse stats for {player_name} (url_name={url_name}), using defaults")
     p = defaults["first_in"] * defaults["first_won"] + (1 - defaults["first_in"]) * defaults["second_won"]
     return {**defaults, "p_serve": round(p, 4), "is_default": True}
 
@@ -172,10 +151,8 @@ async def scrape_from_url(
     url: str, surface: str | None = None, opponent_rank: int | None = None
 ) -> dict | None:
     """Scrape serve stats from a user-provided Tennis Abstract URL."""
-    # Convert non-classic URLs to classic format (our parser needs it)
     if "player.cgi" in url and "player-classic.cgi" not in url:
         url = url.replace("player.cgi", "player-classic.cgi")
-    # Ensure the career stats filter is applied
     if "f=" not in url:
         url += "&f=ACareerqq" if "?" in url else "?f=ACareerqq"
 
