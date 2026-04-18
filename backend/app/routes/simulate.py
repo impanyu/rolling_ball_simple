@@ -249,7 +249,7 @@ async def match_update(req: dict):
     # Always reload to get fresh data (FlashScore WebSocket unreliable in headless)
     try:
         await match_page.reload(timeout=10000)
-        await match_page.wait_for_timeout(2000)
+        await match_page.wait_for_timeout(1500)
     except Exception as e:
         logger.warning(f"Page reload failed: {e}")
 
