@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from app.tennis.engine import MatchState, build_win_prob_table
 from app.tennis.simulator import simulate_time_slices, win_prob_at_state
-from app.tennis.bayesian import update_serve_components
+from app.tennis.bayesian import update_serve_components, multi_scale_p
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -142,11 +142,11 @@ async def lookup_match(req: LookupRequest):
                 "serving": score_data["serving"],
             }
 
-        # Update serve components from live match stats (1st/2nd separately)
+        # Update p values using multi-scale weighting (far/mid/near)
         stats = await read_match_stats(match_page)
         if stats:
-            serve_a_updated = _update_p_from_stats(serve_a, stats, "a")
-            serve_b_updated = _update_p_from_stats(serve_b, stats, "b")
+            serve_a_updated = multi_scale_p(serve_a, stats, None, "a")
+            serve_b_updated = multi_scale_p(serve_b, stats, None, "b")
 
     total_points = 0
     if match_page and stats:
@@ -167,18 +167,21 @@ async def lookup_match(req: LookupRequest):
         "match_url": match_url,
         "current_score": current_score,
         "total_points": total_points,
-        "p_a_updated": serve_a_updated["p_serve"],
-        "p_b_updated": serve_b_updated["p_serve"],
+        "match_stats": stats,
+        "p_a_updated": serve_a_updated.get("p_serve", p_a_prior),
+        "p_b_updated": serve_b_updated.get("p_serve", p_b_prior),
     }
 
 
-@router.get("/api/match-update")
-async def match_update(
-    match_url: str,
-    a_first_in: float, a_first_won: float, a_second_won: float,
-    b_first_in: float, b_first_won: float, b_second_won: float,
-    num_simulations: int = 100_000,
-):
+@router.post("/api/match-update")
+async def match_update(req: dict):
+    """Re-read FlashScore DOM, update p values with near/mid/far weighting."""
+    match_url = req.get("match_url", "")
+    serve_a_prior = req.get("serve_a_prior", {})
+    serve_b_prior = req.get("serve_b_prior", {})
+    prev_stats = req.get("prev_stats")
+    num_simulations = req.get("num_simulations", 100_000)
+
     from app.scraper.browser import get_browser
     from app.scraper.flashscore import read_match_score, read_match_stats
 
@@ -204,27 +207,22 @@ async def match_update(
         "serving": score_data["serving"],
     }
 
-    serve_a_prior = {"first_in": a_first_in, "first_won": a_first_won, "second_won": a_second_won}
-    serve_b_prior = {"first_in": b_first_in, "first_won": b_first_won, "second_won": b_second_won}
-    serve_a_updated = serve_a_prior.copy()
-    serve_b_updated = serve_b_prior.copy()
-
     stats = await read_match_stats(match_page)
-    if stats:
-        serve_a_updated = _update_p_from_stats(serve_a_prior, stats, "a")
-        serve_b_updated = _update_p_from_stats(serve_b_prior, stats, "b")
 
-    p_a = serve_a_updated.get("p_serve", a_first_in * a_first_won + (1 - a_first_in) * a_second_won)
-    p_b = serve_b_updated.get("p_serve", b_first_in * b_first_won + (1 - b_first_in) * b_second_won)
+    # Multi-scale p: far (prior) + mid (match total) + near (recent delta)
+    serve_a_updated = multi_scale_p(serve_a_prior, stats, prev_stats, "a")
+    serve_b_updated = multi_scale_p(serve_b_prior, stats, prev_stats, "b")
+
+    p_a = serve_a_updated.get("p_serve", serve_a_prior.get("p_serve", 0.64))
+    p_b = serve_b_updated.get("p_serve", serve_b_prior.get("p_serve", 0.64))
+
+    logger.info(
+        f"MATCH-UPDATE: p_a={p_a:.4f} (far={serve_a_updated.get('p_far')}, mid={serve_a_updated.get('p_mid')}, near={serve_a_updated.get('p_near')}) "
+        f"p_b={p_b:.4f} (far={serve_b_updated.get('p_far')}, mid={serve_b_updated.get('p_mid')}, near={serve_b_updated.get('p_near')})"
+    )
 
     state = score_to_match_state(ScoreInput(**score))
     table = build_win_prob_table(p_a, p_b)
-
-    prob = win_prob_at_state(state, table, p_a, p_b)
-    logger.info(f"MATCH-UPDATE: state={state.key()} p_a={p_a:.4f} p_b={p_b:.4f} in_table={state.key() in table} prob={prob:.4f}")
-    if prob < 0.01 and not state.is_terminal():
-        logger.error(f"SUSPICIOUS 0% in match-update! score={score} p_a={p_a} p_b={p_b}")
-
     sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
 
     total_points = 0
@@ -238,6 +236,7 @@ async def match_update(
         "p_b_updated": round(p_b, 4),
         "serve_a_updated": serve_a_updated,
         "serve_b_updated": serve_b_updated,
+        "match_stats": stats,
         **sim_result,
     }
 

@@ -54,21 +54,22 @@ export async function rescrapePlayer(
 
 export async function fetchMatchUpdate(
     matchUrl: string,
-    serveA: ServeComponents,
-    serveB: ServeComponents,
+    serveAPrior: ServeComponents,
+    serveBPrior: ServeComponents,
+    prevStats: Record<string, number> | null,
     num_simulations: number = 100000
 ): Promise<MatchUpdateResult> {
-    const params = new URLSearchParams({
-        match_url: matchUrl,
-        a_first_in: String(serveA.first_in),
-        a_first_won: String(serveA.first_won),
-        a_second_won: String(serveA.second_won),
-        b_first_in: String(serveB.first_in),
-        b_first_won: String(serveB.first_won),
-        b_second_won: String(serveB.second_won),
-        num_simulations: String(num_simulations),
+    const resp = await fetch("/api/match-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            match_url: matchUrl,
+            serve_a_prior: serveAPrior,
+            serve_b_prior: serveBPrior,
+            prev_stats: prevStats,
+            num_simulations,
+        }),
     });
-    const resp = await fetch(`/api/match-update?${params}`);
     if (!resp.ok) throw new Error(`Update failed: ${resp.status}`);
     return resp.json();
 }

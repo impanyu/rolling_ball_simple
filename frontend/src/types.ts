@@ -52,6 +52,7 @@ export interface LookupResult {
     player_b: string;
     gender: string;
     surface: string | null;
+    match_stats: Record<string, number> | null;
     p_a_prior: number;
     p_b_prior: number;
     serve_a_prior: ServeComponents;
@@ -90,6 +91,7 @@ export interface MatchUpdateResult {
     total_points: number;
     p_a_updated: number;
     p_b_updated: number;
+    match_stats: Record<string, number> | null;
     slices: TimeSlice[];
     combined: {
         total_count: number;
