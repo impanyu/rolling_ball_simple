@@ -17,10 +17,7 @@ interface Props {
 }
 
 export default function DeltaCurve({ histogram, currentProb, playerName }: Props) {
-    // Build delta -> upper tail cumulative data
-    // For each bin, delta = bin_start - currentProb
-    // Upper tail = sum of percentage for bins >= this bin
-    // Compute cumulative from right
+    // Compute cumulative from right: P(value >= bin_start)
     const cumulativeFromRight: number[] = [];
     let cumSum = 0;
     for (let i = histogram.length - 1; i >= 0; i--) {
@@ -28,11 +25,30 @@ export default function DeltaCurve({ histogram, currentProb, playerName }: Props
         cumulativeFromRight[i] = cumSum;
     }
 
-    const chartData = histogram.map((bin, i) => {
-        const delta = Math.round(bin.bin_start - currentProb);
-        const upperTail = Math.round(cumulativeFromRight[i] * 100) / 100;
-        return { delta, upperTail };
-    });
+    // For a given absolute probability, find the upper tail P(value >= prob)
+    function getUpperTail(absProb: number): number {
+        if (absProb <= 0) return 100;
+        if (absProb >= 100) return 0;
+        // Find which bin this falls in
+        const binIdx = Math.floor(absProb / 5);
+        if (binIdx >= histogram.length) return 0;
+        return cumulativeFromRight[binIdx] ?? 0;
+    }
+
+    // Generate fixed delta steps centered at 0
+    // Range: enough to cover from -currentProb to +(100-currentProb)
+    const minDelta = -Math.floor(currentProb / 5) * 5;
+    const maxDelta = Math.ceil((100 - currentProb) / 5) * 5;
+
+    const chartData: { delta: number; upperTail: number }[] = [];
+    for (let d = minDelta; d <= maxDelta; d += 5) {
+        const absProb = currentProb + d;
+        if (absProb < 0 || absProb > 100) continue;
+        chartData.push({
+            delta: d,
+            upperTail: Math.round(getUpperTail(absProb) * 100) / 100,
+        });
+    }
 
     return (
         <div style={{ padding: 20, border: "1px solid #ddd", borderRadius: 8 }}>
@@ -48,7 +64,9 @@ export default function DeltaCurve({ histogram, currentProb, playerName }: Props
                     <XAxis
                         dataKey="delta"
                         type="number"
-                        domain={["dataMin", "dataMax"]}
+                        domain={[minDelta, maxDelta]}
+                        ticks={chartData.map(d => d.delta)}
+                        tick={{ fontSize: 11 }}
                         label={{ value: "Δ from current P(win) (%)", position: "insideBottom", offset: -15 }}
                     />
                     <YAxis
@@ -57,7 +75,7 @@ export default function DeltaCurve({ histogram, currentProb, playerName }: Props
                     />
                     <Tooltip
                         formatter={(value) => [`${Number(value).toFixed(1)}%`, "Upper tail prob"]}
-                        labelFormatter={(label) => `Δ = ${label >= 0 ? "+" : ""}${label}%`}
+                        labelFormatter={(label) => `Δ = ${Number(label) >= 0 ? "+" : ""}${label}%`}
                     />
                     <ReferenceLine x={0} stroke="#e67e22" strokeWidth={2} strokeDasharray="4 4" label={{ value: "Now", position: "top", fontSize: 11, fill: "#e67e22" }} />
                     <Area
