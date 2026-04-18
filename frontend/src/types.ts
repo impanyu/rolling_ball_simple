@@ -91,6 +91,8 @@ export interface MatchUpdateResult {
     total_points: number;
     p_a_updated: number;
     p_b_updated: number;
+    serve_a_updated?: ServeComponents;
+    serve_b_updated?: ServeComponents;
     match_stats: Record<string, number> | null;
     slices: TimeSlice[];
     combined: {

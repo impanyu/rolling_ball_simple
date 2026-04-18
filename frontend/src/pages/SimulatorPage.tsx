@@ -108,6 +108,8 @@ export default function SimulatorPage() {
                 current_score: update.current_score,
                 p_a_updated: update.p_a_updated,
                 p_b_updated: update.p_b_updated,
+                serve_a_updated: update.serve_a_updated ?? prev.serve_a_updated,
+                serve_b_updated: update.serve_b_updated ?? prev.serve_b_updated,
             } : prev);
             setPA(update.p_a_updated);
             setPB(update.p_b_updated);
