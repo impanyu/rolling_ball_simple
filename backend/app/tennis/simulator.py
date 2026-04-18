@@ -83,7 +83,7 @@ def win_prob_at_state(
             is_tiebreak=False,
         )
 
-        p_after_a = table.get(state_a_wins.key(), 1.0 if state_a_wins.sets_a == 2 else 0.0)
+        p_after_a = table.get(state_a_wins.key(), 1.0 if state_a_wins.sets_a == 2 else (0.0 if state_a_wins.sets_b == 2 else 0.5))
         p_after_b = table.get(state_b_wins.key(), 1.0 if state_b_wins.sets_a == 2 else 0.0)
 
         return p_a_wins_tb * p_after_a + (1.0 - p_a_wins_tb) * p_after_b
@@ -99,11 +99,11 @@ def win_prob_at_state(
 
         p_after_a = table.get(
             state_after_a.key(),
-            1.0 if state_after_a.sets_a == 2 else 0.0,
+            1.0 if state_after_a.sets_a == 2 else (0.0 if state_after_a.sets_b == 2 else 0.5),
         )
         p_after_b = table.get(
             state_after_b.key(),
-            1.0 if state_after_b.sets_a == 2 else 0.0,
+            1.0 if state_after_b.sets_a == 2 else (0.0 if state_after_b.sets_b == 2 else 0.5),
         )
 
         return p_a_wins_game * p_after_a + (1.0 - p_a_wins_game) * p_after_b

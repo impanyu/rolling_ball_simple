@@ -400,8 +400,37 @@ def build_win_prob_table(p_a: float, p_b: float) -> Dict[Tuple, float]:
             cache[k] = prob
             return prob
 
-    # Seed with the initial state; memoization fills the rest bottom-up lazily
-    win_prob(MatchState())
+    # Seed ALL possible game-start states for both serve directions.
+    # This ensures the table covers any state we might query, even if
+    # the serve direction doesn't match natural alternation.
+    for sa in range(2):
+        for sb in range(2):
+            for ga in range(7):  # 0-6
+                for gb in range(7):  # 0-6
+                    # Skip states where set is already won
+                    if ga >= 6 and (ga - gb) >= 2:
+                        continue
+                    if gb >= 6 and (gb - ga) >= 2:
+                        continue
+                    # At 6-6, only tiebreak states are valid
+                    if ga == 6 and gb == 6:
+                        for serving in [True, False]:
+                            win_prob(MatchState(
+                                sets_a=sa, sets_b=sb,
+                                games_a=6, games_b=6,
+                                points_a=0, points_b=0,
+                                is_a_serving=serving,
+                                is_tiebreak=True,
+                            ))
+                        continue
+                    for serving in [True, False]:
+                        win_prob(MatchState(
+                            sets_a=sa, sets_b=sb,
+                            games_a=ga, games_b=gb,
+                            points_a=0, points_b=0,
+                            is_a_serving=serving,
+                            is_tiebreak=False,
+                        ))
 
     # Ensure explicit terminal states are present
     cache[MatchState(sets_a=2).key()] = 1.0
