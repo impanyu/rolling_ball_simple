@@ -224,6 +224,14 @@ async def lookup_match(req: LookupRequest):
 @router.post("/api/match-update")
 async def match_update(req: dict):
     """Re-read FlashScore DOM. Only re-compute if score changed."""
+    try:
+        return await _do_match_update(req)
+    except Exception as e:
+        logger.error(f"match-update error: {e}")
+        return {"error": str(e), "changed": False}
+
+
+async def _do_match_update(req: dict):
     match_url = req.get("match_url", "")
     serve_a_prior = req.get("serve_a_prior", {})
     serve_b_prior = req.get("serve_b_prior", {})
@@ -246,12 +254,12 @@ async def match_update(req: dict):
     if not match_page:
         return {"error": "Match page not found. Please look up the match again."}
 
-    # Always reload to get fresh data (FlashScore WebSocket unreliable in headless)
+    # Reload to get fresh data (FlashScore WebSocket unreliable in headless)
     try:
-        await match_page.reload(timeout=10000)
+        await match_page.reload(timeout=8000)
         await match_page.wait_for_timeout(1500)
     except Exception as e:
-        logger.warning(f"Page reload failed: {e}")
+        logger.warning(f"Page reload failed, reading stale DOM: {e}")
 
     score_data = await read_match_score(match_page)
     if not score_data:
