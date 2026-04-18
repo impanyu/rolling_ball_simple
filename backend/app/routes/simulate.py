@@ -87,53 +87,35 @@ async def simulate(req: SimulateRequest):
 
 @router.post("/api/lookup-match")
 async def lookup_match(req: LookupRequest):
-    import app.config as _config_module
-    settings = _config_module.settings
+    # Step 1: Use user input directly to search FlashScore + DDG (no LLM needed)
+    # Split input into name parts for searching
+    raw_input = req.player_input.strip()
 
-    # Step 1: Parse player names with GPT-4o-mini
-    from openai import AsyncOpenAI
-    openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+    # Step 2: Search FlashScore for live match
+    from app.scraper.flashscore import search_and_open_match, read_match_score, read_match_stats, read_match_surface, read_player_rankings, read_match_gender
+    match_page, player_a, player_b = await search_and_open_match(raw_input, "")
 
-    try:
-        completion = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": (
-                    "Extract two tennis player names from the input. "
-                    "IMPORTANT: Always return FULL names, never abbreviations. "
-                    "For example, 'Bai Z.' should be expanded to the full name like 'Zhuoxuan Bai'. "
-                    "If you cannot determine the full name, return the longest form you can. "
-                    "Return JSON with exactly these fields: "
-                    '{"player_a": "First Last", "player_b": "First Last", "gender": "atp" or "wta"}. '
-                    "Infer gender from the player names. Return only JSON, no other text."
-                )},
-                {"role": "user", "content": req.player_input},
-            ],
-            temperature=0,
-        )
-        parsed = json.loads(completion.choices[0].message.content)
-        player_a = parsed["player_a"]
-        player_b = parsed["player_b"]
-        gender = parsed.get("gender", "atp")
-    except Exception as e:
-        logger.error(f"Failed to parse player names: {e}")
-        return {"error": f"Could not parse player names: {e}"}
+    # If FlashScore search with empty second name found a match,
+    # player names come from the URL. Otherwise use raw input as-is.
+    if not match_page:
+        # Try splitting input on common separators
+        import re
+        parts = re.split(r'\s+vs\.?\s+|\s+v\.?\s+|\s*-\s*|\s+against\s+', raw_input, flags=re.IGNORECASE)
+        if len(parts) == 2:
+            match_page, player_a, player_b = await search_and_open_match(parts[0].strip(), parts[1].strip())
+        if not match_page:
+            player_a = parts[0].strip() if len(parts) >= 1 else raw_input
+            player_b = parts[1].strip() if len(parts) >= 2 else ""
 
-    # Step 2: Search FlashScore for live match (do this first to get surface + real names + rankings)
-    from app.scraper.flashscore import search_and_open_match, read_match_score, read_match_stats, read_match_surface, read_player_rankings
-    match_page, real_a, real_b = await search_and_open_match(player_a, player_b)
-
-    # Use real names from FlashScore URL if available
-    if real_a != player_a:
-        logger.info(f"Using FlashScore names: {real_a} vs {real_b} (LLM: {player_a} vs {player_b})")
-        player_a, player_b = real_a, real_b
-
+    # Step 3: Get gender, surface, rankings from match page
+    gender = "atp"
     surface = None
     rank_a, rank_b = None, None
     if match_page:
+        gender = await read_match_gender(match_page)
         surface = await read_match_surface(match_page)
         rank_a, rank_b = await read_player_rankings(match_page)
-        logger.info(f"Detected surface: {surface}, ranks: {rank_a} vs {rank_b}")
+        logger.info(f"Match found: {player_a} vs {player_b}, gender={gender}, surface={surface}, ranks={rank_a} vs {rank_b}")
 
     # Step 3: Get serve components from Tennis Abstract (adjusted for surface + opponent rank)
     from app.scraper.tennis_abstract import scrape_player_serve_stats

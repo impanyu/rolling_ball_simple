@@ -6,6 +6,31 @@ from app.scraper.browser import get_browser
 logger = logging.getLogger(__name__)
 
 
+async def read_match_gender(page: Page) -> str:
+    """Detect ATP/WTA from FlashScore match page breadcrumbs.
+    Returns 'atp' or 'wta'. Defaults to 'atp' if not detected.
+    """
+    try:
+        els = await page.query_selector_all('[class*="breadcrumb"]')
+        for el in els:
+            text = (await el.text_content() or "").upper()
+            if "WTA" in text:
+                return "wta"
+            if "ATP" in text:
+                return "atp"
+        # Also check ranking labels (e.g. "WTA: 2.")
+        rank_els = await page.query_selector_all('[class*="participantRank"]')
+        for el in rank_els:
+            text = (await el.text_content() or "").upper()
+            if "WTA" in text:
+                return "wta"
+            if "ATP" in text:
+                return "atp"
+    except Exception:
+        pass
+    return "atp"
+
+
 async def read_player_rankings(page: Page) -> tuple[int | None, int | None]:
     """Extract player rankings from FlashScore match page.
     Returns (rank_a, rank_b) or None for each if not found.
@@ -286,7 +311,8 @@ def _ddg_find_player_slugs(player_a: str, player_b: str) -> list[str]:
     """
     try:
         from ddgs import DDGS
-        query = f"site:flashscoreusa.com {player_a} {player_b} tennis"
+        search_terms = f"{player_a} {player_b}".strip()
+        query = f"site:flashscoreusa.com {search_terms} tennis"
         results = list(DDGS().text(query, max_results=5))
         slugs = []
         for r in results:
