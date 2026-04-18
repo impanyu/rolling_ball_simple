@@ -41,18 +41,9 @@ def update_serve_components(
     }
 
 
-W_NEAR = 0.35
-W_MID = 0.40
-W_FAR = 0.25
-
+W_NEAR = 0.30
 NEAR_WINDOW = 10
-
-
-def weighted_p(p_far: float, p_mid: float, p_near: float | None) -> float:
-    if p_near is None:
-        total = W_FAR + W_MID
-        return (W_FAR / total) * p_far + (W_MID / total) * p_mid
-    return W_FAR * p_far + W_MID * p_mid + W_NEAR * p_near
+PRIOR_STRENGTH = 50
 
 
 def compute_near_p_from_history(
@@ -62,17 +53,12 @@ def compute_near_p_from_history(
     prefix: str,
     window: int = NEAR_WINDOW,
 ) -> float | None:
-    """Find a snapshot ~window serve points ago and compute p from the delta.
-
-    stats_history: list of cumulative stat snapshots (oldest first).
-    Finds the snapshot where total was closest to (current_total - window).
-    """
+    """Find a snapshot ~window serve points ago and compute p from the delta."""
     if not stats_history or current_total < window:
         return None
 
     target_total = current_total - window
 
-    # Find the snapshot closest to target_total
     best_snap = None
     best_diff = float("inf")
     for snap in stats_history:
@@ -103,33 +89,53 @@ def multi_scale_p(
     stats_history: list[dict] | None,
     prefix: str,
 ) -> dict:
-    """Compute p value using three time scales: far (prior), mid (match), near (sliding window).
+    """Compute p using far+mid Bayesian update, then blend with near sliding window.
 
-    prior_serve: dict with first_in, first_won, second_won, p_serve
-    match_stats: current cumulative FlashScore stats (or None)
-    stats_history: list of previous cumulative stat snapshots for sliding window (or None)
-    prefix: "a" or "b"
+    Step 1: far (Tennis Abstract prior) + mid (match total) via Bayesian update
+      - far acts as prior with PRIOR_STRENGTH virtual samples
+      - mid is the actual match serve data (observations)
+      - Result: p_far_mid = Bayesian posterior
+
+    Step 2: blend p_far_mid with p_near (sliding window of recent ~10 serves)
+      - p = (1 - W_NEAR) * p_far_mid + W_NEAR * p_near
+      - If p_near not available, p = p_far_mid
     """
     p_far = prior_serve["p_serve"]
 
     if not match_stats:
-        return {**prior_serve, "p_weighted": p_far, "p_far": p_far, "p_mid": None, "p_near": None}
+        return {
+            **prior_serve,
+            "p_weighted": p_far,
+            "p_far": p_far,
+            "p_far_mid": p_far,
+            "p_mid": None,
+            "p_near": None,
+        }
 
+    # Step 1: Bayesian update — far as prior, mid as observations
     match_won = match_stats.get(f"{prefix}_serve_won", 0)
     match_total = match_stats.get(f"{prefix}_serve_total", 0)
     p_mid = match_won / match_total if match_total > 0 else p_far
 
+    p_far_mid = bayesian_update_p(p_far, match_won, match_total, PRIOR_STRENGTH)
+
+    # Step 2: Sliding window near
     p_near = None
     if stats_history:
         p_near = compute_near_p_from_history(match_won, match_total, stats_history, prefix)
 
-    p_weighted = weighted_p(p_far, p_mid, p_near)
+    # Step 3: Blend
+    if p_near is not None:
+        p_weighted = (1 - W_NEAR) * p_far_mid + W_NEAR * p_near
+    else:
+        p_weighted = p_far_mid
 
     return {
         **prior_serve,
         "p_serve": round(p_weighted, 4),
         "p_weighted": round(p_weighted, 4),
         "p_far": round(p_far, 4),
+        "p_far_mid": round(p_far_mid, 4),
         "p_mid": round(p_mid, 4) if match_total > 0 else None,
         "p_near": round(p_near, 4) if p_near is not None else None,
     }
