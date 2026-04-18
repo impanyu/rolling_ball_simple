@@ -245,38 +245,26 @@ async def _do_match_update(req: dict):
     from app.scraper.flashscore import read_match_score, read_match_stats
 
     browser = await get_browser()
-    pages = browser.contexts[0].pages if browser.contexts else []
+    # Open a fresh tab, read data, close tab (no reload/goto on existing page)
     match_page = None
-    page_urls = []
-    for page in pages:
-        page_urls.append(page.url[:80])
-        if match_url in page.url:
-            match_page = page
-            break
-
-    if not match_page:
-        logger.error(f"Match page not found! match_url={match_url[:80]}, open pages={page_urls}")
-        return {"error": "Match page not found. Please look up the match again.", "changed": False}
-
-    # Navigate to match URL to get fresh data (more stable than reload)
     try:
+        match_page = await browser.new_page()
         await match_page.goto(match_url, timeout=10000, wait_until="domcontentloaded")
         await match_page.wait_for_timeout(1500)
     except Exception as e:
-        logger.warning(f"Navigation failed: {e}, trying recovery")
-        try:
-            from app.scraper.browser import close_browser
-            await close_browser()
-            browser = await get_browser()
-            match_page = await browser.new_page()
-            await match_page.goto(match_url, timeout=10000)
-            await match_page.wait_for_timeout(2000)
-            logger.info("Recovered with new browser + page")
-        except Exception as e2:
-            logger.error(f"Recovery failed: {e2}")
-            return {"error": "Browser connection lost. Please look up the match again."}
+        logger.warning(f"Navigation failed: {e}")
+        if match_page:
+            try: await match_page.close()
+            except: pass
+        return {"error": "Could not load match page.", "changed": False}
 
-    score_data = await read_match_score(match_page)
+    try:
+        score_data = await read_match_score(match_page)
+        stats = await read_match_stats(match_page)
+    finally:
+        try: await match_page.close()
+        except: pass
+
     if not score_data:
         return {"error": "Could not read match score"}
 
@@ -290,8 +278,6 @@ async def _do_match_update(req: dict):
     logger.info(f">>> Score read: {score}, prev: {prev_score}")
     if prev_score and score == prev_score:
         return {"changed": False, "current_score": score}
-
-    stats = await read_match_stats(match_page)
 
     # Multi-scale p: far (prior) + mid (match total) + near (sliding window)
     serve_a_updated = multi_scale_p(serve_a_prior, stats, stats_history, "a")
