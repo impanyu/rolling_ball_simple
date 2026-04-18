@@ -72,6 +72,13 @@ def _update_p_from_stats(prior_serve: dict, stats: dict, prefix: str) -> dict:
 async def simulate(req: SimulateRequest):
     state = score_to_match_state(req.score)
     table = build_win_prob_table(req.p_a, req.p_b)
+
+    # Debug: check if state is in table
+    prob = win_prob_at_state(state, table, req.p_a, req.p_b)
+    logger.info(f"SIMULATE: state={state.key()} p_a={req.p_a} p_b={req.p_b} in_table={state.key() in table} prob={prob:.4f}")
+    if prob < 0.01 and not state.is_terminal():
+        logger.error(f"SUSPICIOUS 0% prob for non-terminal state! score={req.score}")
+
     result = simulate_time_slices(
         state, req.p_a, req.p_b, table, req.num_simulations
     )
@@ -227,6 +234,12 @@ async def match_update(
 
     state = score_to_match_state(ScoreInput(**score))
     table = build_win_prob_table(p_a, p_b)
+
+    prob = win_prob_at_state(state, table, p_a, p_b)
+    logger.info(f"MATCH-UPDATE: state={state.key()} p_a={p_a:.4f} p_b={p_b:.4f} in_table={state.key() in table} prob={prob:.4f}")
+    if prob < 0.01 and not state.is_terminal():
+        logger.error(f"SUSPICIOUS 0% in match-update! score={score} p_a={p_a} p_b={p_b}")
+
     sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
 
     total_points = 0
