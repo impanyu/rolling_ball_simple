@@ -253,7 +253,12 @@ async def _do_match_update(req: dict):
 
     try:
         score_data = await read_match_score(match_page)
+        # Wait for stats to render (they load after the score header)
         stats = await read_match_stats(match_page)
+        if not stats or stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0) < 5:
+            # Stats not fully loaded yet, wait more and retry
+            await match_page.wait_for_timeout(2000)
+            stats = await read_match_stats(match_page)
     finally:
         try: await match_page.close()
         except: pass
@@ -272,7 +277,11 @@ async def _do_match_update(req: dict):
     if prev_score and score == prev_score:
         return {"changed": False, "current_score": score}
 
-    # Multi-scale p: far (prior) + mid (match total) + near (sliding window)
+    # Use latest stats from history as fallback if current read is incomplete
+    if stats_history and (not stats or stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0) < 5):
+        logger.warning(f"Stats incomplete ({stats}), using last known stats from history")
+        stats = stats_history[-1]
+
     serve_a_updated = multi_scale_p(serve_a_prior, stats, stats_history, "a")
     serve_b_updated = multi_scale_p(serve_b_prior, stats, stats_history, "b")
 
