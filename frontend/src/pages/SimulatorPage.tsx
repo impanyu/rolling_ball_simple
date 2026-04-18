@@ -59,6 +59,7 @@ export default function SimulatorPage() {
     const [simTab, setSimTab] = useState<"timeslice" | "maxprob">(() => loadSession("simTab", "timeslice"));
     const [maxResult, setMaxResult] = useState<(QueryResponse & { current_win_prob: number }) | null>(() => loadSession("maxResult", null));
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const updatingRef = useRef(false);
 
     // Persist key state to sessionStorage
     useEffect(() => { saveSession("lookup", lookup); }, [lookup]);
@@ -125,6 +126,8 @@ export default function SimulatorPage() {
 
     const doAutoUpdate = async () => {
         if (!lookup?.match_url) return;
+        if (updatingRef.current) return; // Skip if previous update still running
+        updatingRef.current = true;
         try {
             const update = await fetchMatchUpdate(
                 lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory, firstServer,
@@ -174,6 +177,7 @@ export default function SimulatorPage() {
                 return [...prev, { points: tp, prob: update.current_win_prob }];
             });
         } catch { /* silent fail on auto-update */ }
+        finally { updatingRef.current = false; }
     };
 
     const toggleAutoUpdate = () => {
