@@ -43,7 +43,7 @@ def update_serve_components(
 
 W_NEAR = 0.30
 NEAR_WINDOW = 10
-PRIOR_STRENGTH = 50
+PRIOR_STRENGTH = 20
 
 
 def compute_near_p_from_history(
