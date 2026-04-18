@@ -100,6 +100,9 @@ async def lookup_match(req: LookupRequest):
             messages=[
                 {"role": "system", "content": (
                     "Extract two tennis player names from the input. "
+                    "IMPORTANT: Always return FULL names, never abbreviations. "
+                    "For example, 'Bai Z.' should be expanded to the full name like 'Zhuoxuan Bai'. "
+                    "If you cannot determine the full name, return the longest form you can. "
                     "Return JSON with exactly these fields: "
                     '{"player_a": "First Last", "player_b": "First Last", "gender": "atp" or "wta"}. '
                     "Infer gender from the player names. Return only JSON, no other text."

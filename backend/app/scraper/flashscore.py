@@ -291,13 +291,23 @@ async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | No
         await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
         await page.wait_for_timeout(4000)
 
-        a_last = player_a.split()[-1].lower()
-        b_last = player_b.split()[-1].lower()
+        # Use the longest name part (>= 3 chars) for matching, not just last name
+        # Handles abbreviated names like "Bai Z." where last word is too short
+        def _best_match_parts(name: str) -> list[str]:
+            parts = [p.lower().rstrip(".") for p in name.split() if len(p.rstrip(".")) >= 3]
+            if not parts:
+                parts = [p.lower().rstrip(".") for p in name.split() if len(p.rstrip(".")) >= 2]
+            return parts
+
+        a_parts = _best_match_parts(player_a)
+        b_parts = _best_match_parts(player_b)
 
         links = await page.query_selector_all('a[href*="/game/tennis/"]')
         for link in links:
             href = (await link.get_attribute("href") or "").lower()
-            if a_last in href and b_last in href:
+            a_match = any(p in href for p in a_parts)
+            b_match = any(p in href for p in b_parts)
+            if a_match and b_match:
                 match_url = await link.get_attribute("href") or ""
                 if not match_url.startswith("http"):
                     match_url = f"https://www.flashscoreusa.com{match_url}"
