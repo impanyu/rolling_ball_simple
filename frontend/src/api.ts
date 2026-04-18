@@ -32,7 +32,7 @@ export async function runSimulation(
     const resp = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ p_a, p_b, score, num_simulations }),
+        body: JSON.stringify({ p_a, p_b, score, first_server: "a", num_simulations }),
     });
     if (!resp.ok) throw new Error(`Simulation failed: ${resp.status}`);
     return resp.json();
@@ -67,6 +67,7 @@ export async function fetchMatchUpdate(
             serve_a_prior: serveAPrior,
             serve_b_prior: serveBPrior,
             stats_history: statsHistory,
+            first_server: "a",
             num_simulations,
         }),
     });

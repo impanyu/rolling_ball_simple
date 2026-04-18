@@ -23,6 +23,7 @@ class SimulateRequest(BaseModel):
     p_a: float
     p_b: float
     score: ScoreInput
+    first_server: str = "a"
     num_simulations: int = 100_000
 
 
@@ -30,8 +31,41 @@ class LookupRequest(BaseModel):
     player_input: str
 
 
-def score_to_match_state(score: ScoreInput) -> MatchState:
+def compute_current_server(
+    sets_a: int, sets_b: int,
+    games_a: int, games_b: int,
+    first_server: str = "a",
+    completed_set_games: list[tuple[int, int]] | None = None,
+) -> bool:
+    """Compute who is serving based on total games played and who served first.
+    Returns True if A is serving.
+    """
+    # Count total games across all sets
+    total_games = games_a + games_b
+    if completed_set_games:
+        for ga, gb in completed_set_games:
+            total_games += ga + gb
+
+    # In regular play: first server serves games 0, 2, 4, ... (even total)
+    # In tiebreak: the player who was receiving serves first in tiebreak
+    is_tiebreak = games_a == 6 and games_b == 6
+
+    if is_tiebreak:
+        # Tiebreak first server = the player who would have served next
+        a_serves_regular = (total_games % 2 == 0) == (first_server == "a")
+        return a_serves_regular
+    else:
+        a_serves = (total_games % 2 == 0) == (first_server == "a")
+        return a_serves
+
+
+def score_to_match_state(score: ScoreInput, first_server: str = "a") -> MatchState:
     is_tiebreak = score.games[0] == 6 and score.games[1] == 6
+    is_a_serving = compute_current_server(
+        score.sets[0], score.sets[1],
+        score.games[0], score.games[1],
+        first_server,
+    )
     return MatchState(
         sets_a=score.sets[0],
         sets_b=score.sets[1],
@@ -39,7 +73,7 @@ def score_to_match_state(score: ScoreInput) -> MatchState:
         games_b=score.games[1],
         points_a=score.points[0],
         points_b=score.points[1],
-        is_a_serving=(score.serving == "a"),
+        is_a_serving=is_a_serving,
         is_tiebreak=is_tiebreak,
     )
 
@@ -70,7 +104,7 @@ def _update_p_from_stats(prior_serve: dict, stats: dict, prefix: str) -> dict:
 
 @router.post("/api/simulate")
 async def simulate(req: SimulateRequest):
-    state = score_to_match_state(req.score)
+    state = score_to_match_state(req.score, req.first_server)
     table = build_win_prob_table(req.p_a, req.p_b)
 
     # Debug: check if state is in table
@@ -180,6 +214,7 @@ async def match_update(req: dict):
     serve_a_prior = req.get("serve_a_prior", {})
     serve_b_prior = req.get("serve_b_prior", {})
     stats_history = req.get("stats_history", [])
+    first_server = req.get("first_server", "a")
     num_simulations = req.get("num_simulations", 100_000)
 
     from app.scraper.browser import get_browser
@@ -221,7 +256,7 @@ async def match_update(req: dict):
         f"p_b={p_b:.4f} (far={serve_b_updated.get('p_far')}, mid={serve_b_updated.get('p_mid')}, near={serve_b_updated.get('p_near')})"
     )
 
-    state = score_to_match_state(ScoreInput(**score))
+    state = score_to_match_state(ScoreInput(**score), first_server)
     table = build_win_prob_table(p_a, p_b)
     sim_result = simulate_time_slices(state, p_a, p_b, table, num_simulations)
 
