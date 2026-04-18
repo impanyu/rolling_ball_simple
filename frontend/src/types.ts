@@ -44,6 +44,9 @@ export interface ServeComponents {
     first_won: number;
     second_won: number;
     p_serve: number;
+    p_far_mid?: number;
+    p_near?: number | null;
+    p_far?: number;
     is_default?: boolean;
 }
 

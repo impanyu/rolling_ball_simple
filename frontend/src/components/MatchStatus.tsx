@@ -64,6 +64,8 @@ export default function MatchStatus({
                         <th style={{ padding: "4px 12px" }}>1st In</th>
                         <th style={{ padding: "4px 12px" }}>1st Won</th>
                         <th style={{ padding: "4px 12px" }}>2nd Won</th>
+                        <th style={{ padding: "4px 12px" }}>p_far_mid</th>
+                        <th style={{ padding: "4px 12px" }}>p_near</th>
                         <th style={{ padding: "4px 12px" }}>p (combined)</th>
                     </tr>
                 </thead>
@@ -85,6 +87,12 @@ export default function MatchStatus({
                             <td style={{ padding: "4px 12px", textAlign: "center" }}>
                                 <span style={{ color: "#888" }}>{(prior.second_won * 100).toFixed(1)}%</span>
                                 {" → "}{(updated.second_won * 100).toFixed(1)}%
+                            </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center", fontSize: 13 }}>
+                                {updated.p_far_mid != null ? (updated.p_far_mid * 100).toFixed(1) + "%" : "—"}
+                            </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center", fontSize: 13 }}>
+                                {updated.p_near != null ? (updated.p_near * 100).toFixed(1) + "%" : "—"}
                             </td>
                             <td style={{ padding: "4px 12px", textAlign: "center" }}>
                                 <input type="number" step={0.001}
