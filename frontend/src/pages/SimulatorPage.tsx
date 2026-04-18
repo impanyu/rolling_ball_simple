@@ -3,6 +3,7 @@ import MatchInput from "../components/MatchInput";
 import MatchStatus from "../components/MatchStatus";
 import Histogram from "../components/Histogram";
 import WinProbChart from "../components/WinProbChart";
+import DeltaCurve from "../components/DeltaCurve";
 import { lookupMatch, runSimulation, fetchMatchUpdate, rescrapePlayer } from "../api";
 import type { LookupResult, SimulateResult, QueryResponse, HistogramBin } from "../types";
 
@@ -322,6 +323,17 @@ export default function SimulatorPage() {
                                 currentProb={currentProb ?? undefined}
                             />
                         </div>
+
+                        {/* Delta cumulative curve */}
+                        {currentProb !== null && (
+                            <div style={{ marginTop: 20 }}>
+                                <DeltaCurve
+                                    histogram={toViewData(simResult.combined.histogram, simResult.combined.stats, simResult.combined.total_count).histogram}
+                                    currentProb={currentProb}
+                                    playerName={viewName}
+                                />
+                            </div>
+                        )}
                     </>
                 )}
             </div>
