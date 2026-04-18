@@ -112,12 +112,26 @@ def multi_scale_p(
             "p_near": None,
         }
 
-    # Step 1: Bayesian update — far as prior, mid as observations
+    # Step 1: Bayesian update per component — far as prior, mid as observations
+    obs_1st_won = match_stats.get(f"{prefix}_1st_serve_won", 0)
+    obs_1st_total = match_stats.get(f"{prefix}_1st_serve_total", 0)
+    obs_2nd_won = match_stats.get(f"{prefix}_2nd_serve_won", 0)
+    obs_2nd_total = match_stats.get(f"{prefix}_2nd_serve_total", 0)
+
+    far_first_in = prior_serve.get("first_in", 0.60)
+    far_first_won = prior_serve.get("first_won", 0.70)
+    far_second_won = prior_serve.get("second_won", 0.50)
+
+    # Bayesian update each component separately
+    mid_first_in = bayesian_update_p(far_first_in, obs_1st_total, obs_1st_total + obs_2nd_total, PRIOR_STRENGTH) if (obs_1st_total + obs_2nd_total) > 0 else far_first_in
+    mid_first_won = bayesian_update_p(far_first_won, obs_1st_won, obs_1st_total, PRIOR_STRENGTH) if obs_1st_total > 0 else far_first_won
+    mid_second_won = bayesian_update_p(far_second_won, obs_2nd_won, obs_2nd_total, PRIOR_STRENGTH) if obs_2nd_total > 0 else far_second_won
+
+    p_far_mid = compute_p(mid_first_in, mid_first_won, mid_second_won)
+
     match_won = match_stats.get(f"{prefix}_serve_won", 0)
     match_total = match_stats.get(f"{prefix}_serve_total", 0)
     p_mid = match_won / match_total if match_total > 0 else p_far
-
-    p_far_mid = bayesian_update_p(p_far, match_won, match_total, PRIOR_STRENGTH)
 
     # Step 2: Sliding window near
     p_near = None
