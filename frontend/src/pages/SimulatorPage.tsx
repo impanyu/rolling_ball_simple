@@ -57,7 +57,7 @@ export default function SimulatorPage() {
     const [rescraping, setRescraping] = useState(false);
     const [statsHistory, setStatsHistory] = useState<Record<string, number>[]>(() => loadSession("statsHistory", []));
     const [simTab, setSimTab] = useState<"timeslice" | "maxprob">(() => loadSession("simTab", "timeslice"));
-    const [maxResult, setMaxResult] = useState<(QueryResponse & { current_win_prob: number }) | null>(() => loadSession("maxResult", null));
+    const [maxResult, setMaxResult] = useState<{ current_win_prob: number; max_prob_a: { total_count: number; histogram: HistogramBin[]; stats: { mean: number; median: number; std: number } }; min_prob_a: { total_count: number; histogram: HistogramBin[]; stats: { mean: number; median: number; std: number } } } | null>(() => loadSession("maxResult", null));
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const updatingRef = useRef(false);
 
@@ -95,7 +95,7 @@ export default function SimulatorPage() {
             setSimulating(true);
             const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 100000);
             setSimResult(sim);
-            setMaxResult({ current_win_prob: sim.current_win_prob, ...sim.max_prob });
+            setMaxResult({ current_win_prob: sim.current_win_prob, max_prob_a: sim.max_prob_a, min_prob_a: sim.min_prob_a });
             setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob }]);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Lookup failed");
@@ -149,10 +149,11 @@ export default function SimulatorPage() {
                 current_win_prob: update.current_win_prob,
                 slices: update.slices!,
                 combined: update.combined!,
-                max_prob: update.max_prob!,
+                max_prob_a: update.max_prob_a!,
+                min_prob_a: update.min_prob_a!,
             });
-            if (update.max_prob) {
-                setMaxResult({ current_win_prob: update.current_win_prob, ...update.max_prob });
+            if (update.max_prob_a) {
+                setMaxResult({ current_win_prob: update.current_win_prob, max_prob_a: update.max_prob_a, min_prob_a: update.min_prob_a! });
             }
             setProbHistory(prev => {
                 const tp = update.total_points;
@@ -405,15 +406,21 @@ export default function SimulatorPage() {
             <div style={{ marginTop: 16 }}>
                 {simulating && <p style={{ textAlign: "center", color: "#888" }}>Simulating...</p>}
 
-                {simTab === "maxprob" && maxResult && (
-                    <Histogram
-                        data={{ total_count: maxResult.total_count, histogram: isFlipped ? flipHistogram(maxResult.histogram) : maxResult.histogram, stats: isFlipped ? flipStats(maxResult.stats) : maxResult.stats }}
+                {simTab === "maxprob" && maxResult && (() => {
+                    // For player A: use max_prob_a (max of P(A wins))
+                    // For player B: use 100 - min_prob_a values (= max of P(B wins))
+                    const src = isFlipped ? maxResult.min_prob_a : maxResult.max_prob_a;
+                    const displayData = isFlipped
+                        ? { total_count: src.total_count, histogram: flipHistogram(src.histogram), stats: flipStats(src.stats) }
+                        : { total_count: src.total_count, histogram: src.histogram, stats: src.stats };
+                    return <Histogram
+                        data={displayData}
                         xLabel="Max P(win) %"
                         unit="%"
                         title={`Max Win Probability in next 100 pts — ${viewName}`}
                         currentProb={currentProb ?? undefined}
-                    />
-                )}
+                    />;
+                })()}
 
                 {simTab === "timeslice" && simResult && (
                     <>

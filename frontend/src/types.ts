@@ -85,7 +85,12 @@ export interface SimulateResult {
         histogram: HistogramBin[];
         stats: Stats;
     };
-    max_prob: {
+    max_prob_a: {
+        total_count: number;
+        histogram: HistogramBin[];
+        stats: Stats;
+    };
+    min_prob_a: {
         total_count: number;
         histogram: HistogramBin[];
         stats: Stats;
@@ -110,7 +115,12 @@ export interface MatchUpdateResult {
         histogram: HistogramBin[];
         stats: Stats;
     };
-    max_prob?: {
+    max_prob_a?: {
+        total_count: number;
+        histogram: HistogramBin[];
+        stats: Stats;
+    };
+    min_prob_a?: {
         total_count: number;
         histogram: HistogramBin[];
         stats: Stats;

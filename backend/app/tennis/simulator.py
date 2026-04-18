@@ -205,12 +205,15 @@ def simulate_combined(
     current_win_prob = win_prob_at_state(start_state, table, p_a, p_b) * 100.0
 
     horizon_values: Dict[int, List[float]] = {h: [] for h in horizons}
-    max_probs: List[float] = []
+    max_probs_a: List[float] = []
+    min_probs_a: List[float] = []
     horizon_set = set(horizons)
 
     for sim_idx in range(n_simulations):
         state = start_state
-        path_max = win_prob_at_state(state, table, p_a, p_b)
+        init_prob = win_prob_at_state(state, table, p_a, p_b)
+        path_max = init_prob
+        path_min = init_prob
         recorded_horizons: set[int] = set()
 
         for point_idx in range(1, max_points + 1):
@@ -218,7 +221,8 @@ def simulate_combined(
                 terminal_prob = 1.0 if state.sets_a == 2 else 0.0
                 if terminal_prob > path_max:
                     path_max = terminal_prob
-                # Fill remaining horizons with terminal prob
+                if terminal_prob < path_min:
+                    path_min = terminal_prob
                 for h in horizons:
                     if h not in recorded_horizons:
                         horizon_values[h].append(terminal_prob * 100.0)
@@ -236,18 +240,20 @@ def simulate_combined(
 
             if prob > path_max:
                 path_max = prob
+            if prob < path_min:
+                path_min = prob
 
             if point_idx in horizon_set and point_idx not in recorded_horizons:
                 horizon_values[point_idx].append(prob * 100.0)
                 recorded_horizons.add(point_idx)
 
-        # Fill any horizons beyond max_points that weren't reached
         for h in horizons:
             if h not in recorded_horizons:
                 final_prob = (1.0 if state.sets_a == 2 else 0.0) if state.is_terminal() else win_prob_at_state(state, table, p_a, p_b)
                 horizon_values[h].append(final_prob * 100.0)
 
-        max_probs.append(path_max * 100.0)
+        max_probs_a.append(path_max * 100.0)
+        min_probs_a.append(path_min * 100.0)
 
     # Build time-slice results
     slices = []
@@ -288,10 +294,15 @@ def simulate_combined(
             "histogram": combined_histogram,
             "stats": _compute_stats(all_weighted) if all_weighted else {"mean": 0, "median": 0, "std": 0},
         },
-        "max_prob": {
+        "max_prob_a": {
             "total_count": n_simulations,
-            "histogram": _build_histogram(max_probs),
-            "stats": _compute_stats(max_probs),
+            "histogram": _build_histogram(max_probs_a),
+            "stats": _compute_stats(max_probs_a),
+        },
+        "min_prob_a": {
+            "total_count": n_simulations,
+            "histogram": _build_histogram(min_probs_a),
+            "stats": _compute_stats(min_probs_a),
         },
     }
 
