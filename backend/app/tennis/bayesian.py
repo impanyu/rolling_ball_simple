@@ -145,7 +145,9 @@ def multi_scale_p(
         p_weighted = p_far_mid
 
     return {
-        **prior_serve,
+        "first_in": round(mid_first_in, 4),
+        "first_won": round(mid_first_won, 4),
+        "second_won": round(mid_second_won, 4),
         "p_serve": round(p_weighted, 4),
         "p_weighted": round(p_weighted, 4),
         "p_far": round(p_far, 4),
