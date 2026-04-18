@@ -280,27 +280,73 @@ async def _read_page_player_names(page: Page, url: str) -> tuple[str, str]:
     return "Player A", "Player B"
 
 
+def _ddg_find_player_slugs(player_a: str, player_b: str) -> list[str]:
+    """Use DuckDuckGo to find FlashScore player slugs (e.g. 'bai-zhuoxuan').
+    Returns a list of slugs found for either player.
+    """
+    try:
+        from ddgs import DDGS
+        query = f"site:flashscoreusa.com {player_a} {player_b} tennis"
+        results = list(DDGS().text(query, max_results=5))
+        slugs = []
+        for r in results:
+            href = r.get("href", "")
+            # Extract player slugs from various FlashScore URL patterns
+            for pattern in [
+                r'/game/tennis/([\w-]+?)-\w{8}/',
+                r'/player/([\w-]+?)/\w{8}/',
+                r'/h2h/tennis/([\w-]+?)-\w{8}/',
+            ]:
+                for m in re.finditer(pattern, href):
+                    slug = m.group(1)
+                    if slug not in slugs:
+                        slugs.append(slug)
+        logger.info(f"DDG found FlashScore slugs: {slugs}")
+        return slugs
+    except Exception as e:
+        logger.warning(f"DDG FlashScore search failed: {e}")
+        return []
+
+
+def _best_match_parts(name: str) -> list[str]:
+    """Extract usable name parts (>= 3 chars) for URL matching."""
+    parts = [p.lower().rstrip(".") for p in name.split() if len(p.rstrip(".")) >= 3]
+    if not parts:
+        parts = [p.lower().rstrip(".") for p in name.split() if len(p.rstrip(".")) >= 2]
+    return parts
+
+
 async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | None, str, str]:
     """Search FlashScore tennis page for a match between two players.
-    Opens the main match page (not PBP subpage) to get current score.
+    Uses DDG to find player slugs, then matches on the live tennis page.
     Returns (page, home_player, away_player). HOME matches score's left number.
     """
+    # Step 1: Get player slugs via DuckDuckGo for better matching
+    ddg_slugs = _ddg_find_player_slugs(player_a, player_b)
+
+    # Build match parts from LLM names + DDG slugs
+    a_parts = _best_match_parts(player_a)
+    b_parts = _best_match_parts(player_b)
+
+    # Add DDG slug parts (split on '-' to get name components)
+    for slug in ddg_slugs:
+        for part in slug.split("-"):
+            if len(part) >= 3 and part not in a_parts and part not in b_parts:
+                # Assign to whichever player it matches best
+                if any(p in slug for p in a_parts):
+                    if part not in a_parts:
+                        a_parts.append(part)
+                elif any(p in slug for p in b_parts):
+                    if part not in b_parts:
+                        b_parts.append(part)
+
+    logger.info(f"Matching parts: A={a_parts}, B={b_parts}")
+
     browser = await get_browser()
     page = await browser.new_page()
     try:
         await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
         await page.wait_for_timeout(4000)
-
-        # Use the longest name part (>= 3 chars) for matching, not just last name
-        # Handles abbreviated names like "Bai Z." where last word is too short
-        def _best_match_parts(name: str) -> list[str]:
-            parts = [p.lower().rstrip(".") for p in name.split() if len(p.rstrip(".")) >= 3]
-            if not parts:
-                parts = [p.lower().rstrip(".") for p in name.split() if len(p.rstrip(".")) >= 2]
-            return parts
-
-        a_parts = _best_match_parts(player_a)
-        b_parts = _best_match_parts(player_b)
 
         links = await page.query_selector_all('a[href*="/game/tennis/"]')
         for link in links:
@@ -315,7 +361,6 @@ async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | No
                 await page.goto(match_url, timeout=15000)
                 await page.wait_for_timeout(5000)
 
-                # Determine actual HOME/AWAY order from page
                 real_a, real_b = await _read_page_player_names(page, match_url)
                 logger.info(f"Found match: {match_url} (HOME={real_a} vs AWAY={real_b})")
                 return page, real_a, real_b
