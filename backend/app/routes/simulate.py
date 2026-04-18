@@ -176,14 +176,16 @@ async def lookup_match(req: LookupRequest):
                 "serving": score_data["serving"],
             }
 
-        # Update p values using multi-scale weighting (far/mid/near)
+        # Wait a bit more for stats section to render, then read
+        await match_page.wait_for_timeout(2000)
         stats = await read_match_stats(match_page)
         logger.info(f"LOOKUP stats result: {stats}")
         if stats:
             serve_a_updated = multi_scale_p(serve_a, stats, [], "a")
             serve_b_updated = multi_scale_p(serve_b, stats, [], "b")
             logger.info(f"LOOKUP prior A:   fi={serve_a.get('first_in')}, fw={serve_a.get('first_won')}, sw={serve_a.get('second_won')}, p={serve_a.get('p_serve')}")
-            logger.info(f"LOOKUP updated A: fi={serve_a_updated.get('first_in')}, fw={serve_a_updated.get('first_won')}, sw={serve_a_updated.get('second_won')}, p={serve_a_updated.get('p_serve')}")
+            logger.info(f"LOOKUP updated A: fi={serve_a_updated.get('first_in')}, fw={serve_a_updated.get('first_won')}, sw={serve_a_updated.get('second_won')}, p={serve_a_updated.get('p_serve')}, window={serve_a_updated.get('window_size')}")
+            logger.info(f"LOOKUP updated B: fi={serve_b_updated.get('first_in')}, fw={serve_b_updated.get('first_won')}, sw={serve_b_updated.get('second_won')}, p={serve_b_updated.get('p_serve')}, window={serve_b_updated.get('window_size')}")
         else:
             logger.warning("LOOKUP: no match stats available, using priors as-is")
 
