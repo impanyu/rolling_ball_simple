@@ -56,7 +56,7 @@ export async function fetchMatchUpdate(
     matchUrl: string,
     serveAPrior: ServeComponents,
     serveBPrior: ServeComponents,
-    prevStats: Record<string, number> | null,
+    statsHistory: Record<string, number>[],
     num_simulations: number = 100000
 ): Promise<MatchUpdateResult> {
     const resp = await fetch("/api/match-update", {
@@ -66,7 +66,7 @@ export async function fetchMatchUpdate(
             match_url: matchUrl,
             serve_a_prior: serveAPrior,
             serve_b_prior: serveBPrior,
-            prev_stats: prevStats,
+            stats_history: statsHistory,
             num_simulations,
         }),
     });

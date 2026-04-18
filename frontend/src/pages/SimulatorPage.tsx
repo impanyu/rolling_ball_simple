@@ -43,7 +43,7 @@ export default function SimulatorPage() {
     const [urlA, setUrlA] = useState("");
     const [urlB, setUrlB] = useState("");
     const [rescraping, setRescraping] = useState(false);
-    const [prevStats, setPrevStats] = useState<Record<string, number> | null>(null);
+    const [statsHistory, setStatsHistory] = useState<Record<string, number>[]>([]);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const handleLookup = async (input: string) => {
@@ -57,14 +57,14 @@ export default function SimulatorPage() {
         setError(null);
         setSimResult(null);
         setProbHistory([]);
-        setPrevStats(null);
+        setStatsHistory([]);
         try {
             const result = await lookupMatch(input);
             if (result.error) { setError(result.error); return; }
             setLookup(result);
             setPA(result.p_a_updated);
             setPB(result.p_b_updated);
-            setPrevStats(result.match_stats || null);
+            if (result.match_stats) setStatsHistory([result.match_stats]);
             setSimulating(true);
             const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, 100000);
             setSimResult(sim);
@@ -97,10 +97,12 @@ export default function SimulatorPage() {
         if (!lookup?.match_url) return;
         try {
             const update = await fetchMatchUpdate(
-                lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, prevStats
+                lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory
             );
             if (update.error) return;
-            setPrevStats(update.match_stats || prevStats);
+            if (update.match_stats) {
+                setStatsHistory(prev => [...prev, update.match_stats!]);
+            }
             setLookup(prev => prev ? {
                 ...prev,
                 current_score: update.current_score,

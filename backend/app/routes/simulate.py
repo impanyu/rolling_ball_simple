@@ -145,8 +145,8 @@ async def lookup_match(req: LookupRequest):
         # Update p values using multi-scale weighting (far/mid/near)
         stats = await read_match_stats(match_page)
         if stats:
-            serve_a_updated = multi_scale_p(serve_a, stats, None, "a")
-            serve_b_updated = multi_scale_p(serve_b, stats, None, "b")
+            serve_a_updated = multi_scale_p(serve_a, stats, [], "a")
+            serve_b_updated = multi_scale_p(serve_b, stats, [], "b")
 
     total_points = 0
     if match_page and stats:
@@ -179,7 +179,7 @@ async def match_update(req: dict):
     match_url = req.get("match_url", "")
     serve_a_prior = req.get("serve_a_prior", {})
     serve_b_prior = req.get("serve_b_prior", {})
-    prev_stats = req.get("prev_stats")
+    stats_history = req.get("stats_history", [])
     num_simulations = req.get("num_simulations", 100_000)
 
     from app.scraper.browser import get_browser
@@ -209,9 +209,9 @@ async def match_update(req: dict):
 
     stats = await read_match_stats(match_page)
 
-    # Multi-scale p: far (prior) + mid (match total) + near (recent delta)
-    serve_a_updated = multi_scale_p(serve_a_prior, stats, prev_stats, "a")
-    serve_b_updated = multi_scale_p(serve_b_prior, stats, prev_stats, "b")
+    # Multi-scale p: far (prior) + mid (match total) + near (sliding window)
+    serve_a_updated = multi_scale_p(serve_a_prior, stats, stats_history, "a")
+    serve_b_updated = multi_scale_p(serve_b_prior, stats, stats_history, "b")
 
     p_a = serve_a_updated.get("p_serve", serve_a_prior.get("p_serve", 0.64))
     p_b = serve_b_updated.get("p_serve", serve_b_prior.get("p_serve", 0.64))
