@@ -247,13 +247,16 @@ async def _do_match_update(req: dict):
     browser = await get_browser()
     pages = browser.contexts[0].pages if browser.contexts else []
     match_page = None
+    page_urls = []
     for page in pages:
+        page_urls.append(page.url[:80])
         if match_url in page.url:
             match_page = page
             break
 
     if not match_page:
-        return {"error": "Match page not found. Please look up the match again."}
+        logger.error(f"Match page not found! match_url={match_url[:80]}, open pages={page_urls}")
+        return {"error": "Match page not found. Please look up the match again.", "changed": False}
 
     # Navigate to match URL to get fresh data (more stable than reload)
     try:
