@@ -160,7 +160,7 @@ export default function SimulatorPage() {
             setAutoUpdating(false);
         } else {
             doAutoUpdate();
-            intervalRef.current = setInterval(doAutoUpdate, 5000);
+            intervalRef.current = setInterval(doAutoUpdate, 10000);
             setAutoUpdating(true);
         }
     };

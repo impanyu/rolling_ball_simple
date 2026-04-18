@@ -246,6 +246,13 @@ async def match_update(req: dict):
     if not match_page:
         return {"error": "Match page not found. Please look up the match again."}
 
+    # Reload page to get fresh data (FlashScore WebSocket may not work in headless)
+    try:
+        await match_page.reload(timeout=10000)
+        await match_page.wait_for_timeout(2000)
+    except Exception as e:
+        logger.warning(f"Page reload failed: {e}")
+
     score_data = await read_match_score(match_page)
     if not score_data:
         return {"error": "Could not read match score"}
