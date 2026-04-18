@@ -238,30 +238,34 @@ async def _do_match_update(req: dict):
     from app.scraper.flashscore import read_match_score, read_match_stats
 
     browser = await get_browser()
-    # Open a fresh tab, read data, close tab (no reload/goto on existing page)
+    # Find the persistent match page tab
+    pages = browser.contexts[0].pages if browser.contexts else []
     match_page = None
-    try:
-        match_page = await browser.new_page()
-        await match_page.goto(match_url, timeout=10000, wait_until="domcontentloaded")
-        await match_page.wait_for_timeout(1500)
-    except Exception as e:
-        logger.warning(f"Navigation failed: {e}")
-        if match_page:
-            try: await match_page.close()
-            except: pass
-        return {"error": "Could not load match page.", "changed": False}
+    for pg in pages:
+        if "/match/tennis/" in pg.url:
+            match_page = pg
+            break
 
+    if not match_page:
+        # No persistent tab — open one (first time after lookup closed it)
+        match_page = await browser.new_page()
+        await match_page.goto(match_url, timeout=10000)
+        await match_page.wait_for_timeout(4000)
+
+    # Read directly from DOM (WebSocket keeps it updated)
     try:
         score_data = await read_match_score(match_page)
-        # Wait for stats to render (they load after the score header)
         stats = await read_match_stats(match_page)
-        if not stats or stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0) < 5:
-            # Stats not fully loaded yet, wait more and retry
-            await match_page.wait_for_timeout(2000)
+    except Exception as e:
+        logger.warning(f"DOM read failed: {e}, reloading page")
+        try:
+            await match_page.reload(timeout=10000)
+            await match_page.wait_for_timeout(4000)
+            score_data = await read_match_score(match_page)
             stats = await read_match_stats(match_page)
-    finally:
-        try: await match_page.close()
-        except: pass
+        except Exception as e2:
+            logger.error(f"Reload also failed: {e2}")
+            return {"error": "Could not read match data.", "changed": False}
 
     if not score_data:
         return {"error": "Could not read match score"}
