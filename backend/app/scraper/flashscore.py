@@ -244,11 +244,11 @@ async def read_flashscore_pbp(page: Page) -> list[dict]:
 
 def extract_player_names_from_url(url: str) -> tuple[str, str] | None:
     """Extract player full names from FlashScore match URL.
-    URL pattern: /game/tennis/lastname-firstname-ID/lastname-firstname-ID/
+    URL pattern: /match/tennis/lastname-firstname-ID/lastname-firstname-ID/
     Returns (player_a_name, player_b_name) or None.
     """
     match = re.search(
-        r'/game/tennis/([\w-]+?)-(\w{8})/([\w-]+?)-(\w{8})/',
+        r'/match/tennis/([\w-]+?)-(\w{8})/([\w-]+?)-(\w{8})/',
         url,
     )
     if not match:
@@ -312,14 +312,14 @@ def _ddg_find_player_slugs(player_a: str, player_b: str) -> list[str]:
     try:
         from ddgs import DDGS
         search_terms = f"{player_a} {player_b}".strip()
-        query = f"site:flashscoreusa.com {search_terms} tennis"
+        query = f"site:flashscore.com {search_terms} tennis"
         results = list(DDGS().text(query, max_results=5))
         slugs = []
         for r in results:
             href = r.get("href", "")
             # Extract player slugs from various FlashScore URL patterns
             for pattern in [
-                r'/game/tennis/([\w-]+?)-\w{8}/',
+                r'/match/tennis/([\w-]+?)-\w{8}/',
                 r'/player/([\w-]+?)/\w{8}/',
                 r'/h2h/tennis/([\w-]+?)-\w{8}/',
             ]:
@@ -373,17 +373,17 @@ async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | No
     # Close old match tabs before opening a new one
     if browser.contexts:
         for old_page in browser.contexts[0].pages:
-            if "/game/tennis/" in old_page.url:
+            if "/match/tennis/" in old_page.url:
                 logger.info(f"Closing old match tab: {old_page.url[:80]}")
                 await old_page.close()
 
     page = await browser.new_page()
     try:
-        await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
+        await page.goto("https://www.flashscore.com/tennis/", timeout=15000)
         await page.wait_for_timeout(4000)
 
         all_parts = a_parts + b_parts
-        links = await page.query_selector_all('a[href*="/game/tennis/"]')
+        links = await page.query_selector_all('a[href*="/match/tennis/"]')
 
         # First pass: try matching both players
         best_link = None
@@ -410,7 +410,7 @@ async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | No
         if best_link:
             match_url = await best_link.get_attribute("href") or ""
             if not match_url.startswith("http"):
-                match_url = f"https://www.flashscoreusa.com{match_url}"
+                match_url = f"https://www.flashscore.com{match_url}"
 
             await page.goto(match_url, timeout=15000)
             await page.wait_for_timeout(5000)
