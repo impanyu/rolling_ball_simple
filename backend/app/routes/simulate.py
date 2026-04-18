@@ -182,6 +182,7 @@ async def lookup_match(req: LookupRequest):
         if stats:
             serve_a_updated = multi_scale_p(serve_a, stats, [], "a")
             serve_b_updated = multi_scale_p(serve_b, stats, [], "b")
+            logger.info(f"LOOKUP prior A:   fi={serve_a.get('first_in')}, fw={serve_a.get('first_won')}, sw={serve_a.get('second_won')}, p={serve_a.get('p_serve')}")
             logger.info(f"LOOKUP updated A: fi={serve_a_updated.get('first_in')}, fw={serve_a_updated.get('first_won')}, sw={serve_a_updated.get('second_won')}, p={serve_a_updated.get('p_serve')}")
         else:
             logger.warning("LOOKUP: no match stats available, using priors as-is")

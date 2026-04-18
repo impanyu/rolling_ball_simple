@@ -13,18 +13,7 @@ interface Props {
 
 const POINT_LABELS = ["0", "15", "30", "40", "AD"];
 
-function computeServer(score: ScoreState, playerA: string, playerB: string): string {
-    // First server = player A (user's first input)
-    // Total games across all completed sets + current set determines who serves
-    // Even total → A serves, Odd total → B serves
-    // Approximate: use current set games to determine server
-    // (cross-set tracking would need completed set game counts)
-    const totalCompleted = score.games[0] + score.games[1];
-    const aServes = totalCompleted % 2 === 0;
-    return aServes ? playerA.split(" ").pop()! : playerB.split(" ").pop()!;
-}
-
-function formatScore(score: ScoreState, playerA: string, playerB: string): string {
+function formatScore(score: ScoreState, _playerA: string, _playerB: string): string {
     const sets = score.sets.join("-");
     const games = score.games.join("-");
     const pa = score.points[0];
@@ -35,8 +24,7 @@ function formatScore(score: ScoreState, playerA: string, playerB: string): strin
         : pa <= 3 && pb <= 3
             ? `${POINT_LABELS[pa] || pa}-${POINT_LABELS[pb] || pb}`
             : `${pa}-${pb}`;
-    const server = computeServer(score, playerA, playerB);
-    return `Sets: ${sets}  Games: ${games}  Points: ${points}  (${server} serving)`;
+    return `Sets: ${sets}  Games: ${games}  Points: ${points}`;
 }
 
 export default function MatchStatus({
@@ -78,15 +66,15 @@ export default function MatchStatus({
                             <td style={{ fontWeight: 600, padding: "4px 12px" }}>{name}</td>
                             <td style={{ padding: "4px 12px", textAlign: "center" }}>
                                 <span style={{ color: "#888" }}>{(prior.first_in * 100).toFixed(1)}%</span>
-                                {" → "}{(updated.first_in * 100).toFixed(1)}%
+                                {" → "}<strong>{(updated.first_in * 100).toFixed(1)}%</strong>
                             </td>
                             <td style={{ padding: "4px 12px", textAlign: "center" }}>
                                 <span style={{ color: "#888" }}>{(prior.first_won * 100).toFixed(1)}%</span>
-                                {" → "}{(updated.first_won * 100).toFixed(1)}%
+                                {" → "}<strong>{(updated.first_won * 100).toFixed(1)}%</strong>
                             </td>
                             <td style={{ padding: "4px 12px", textAlign: "center" }}>
                                 <span style={{ color: "#888" }}>{(prior.second_won * 100).toFixed(1)}%</span>
-                                {" → "}{(updated.second_won * 100).toFixed(1)}%
+                                {" → "}<strong>{(updated.second_won * 100).toFixed(1)}%</strong>
                             </td>
                             <td style={{ padding: "4px 12px", textAlign: "center", fontSize: 13 }}>
                                 {updated.p_far_mid != null ? (updated.p_far_mid * 100).toFixed(1) + "%" : "—"}
