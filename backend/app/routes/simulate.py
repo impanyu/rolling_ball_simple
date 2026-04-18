@@ -232,6 +232,7 @@ async def match_update(req: dict):
 
 
 async def _do_match_update(req: dict):
+    logger.info(">>> MATCH-UPDATE called")
     match_url = req.get("match_url", "")
     serve_a_prior = req.get("serve_a_prior", {})
     serve_b_prior = req.get("serve_b_prior", {})
@@ -254,12 +255,23 @@ async def _do_match_update(req: dict):
     if not match_page:
         return {"error": "Match page not found. Please look up the match again."}
 
-    # Reload to get fresh data (FlashScore WebSocket unreliable in headless)
+    # Navigate to match URL to get fresh data (more stable than reload)
     try:
-        await match_page.reload(timeout=8000)
+        await match_page.goto(match_url, timeout=10000, wait_until="domcontentloaded")
         await match_page.wait_for_timeout(1500)
     except Exception as e:
-        logger.warning(f"Page reload failed, reading stale DOM: {e}")
+        logger.warning(f"Navigation failed: {e}, trying recovery")
+        try:
+            from app.scraper.browser import close_browser
+            await close_browser()
+            browser = await get_browser()
+            match_page = await browser.new_page()
+            await match_page.goto(match_url, timeout=10000)
+            await match_page.wait_for_timeout(2000)
+            logger.info("Recovered with new browser + page")
+        except Exception as e2:
+            logger.error(f"Recovery failed: {e2}")
+            return {"error": "Browser connection lost. Please look up the match again."}
 
     score_data = await read_match_score(match_page)
     if not score_data:
