@@ -348,24 +348,44 @@ async def search_and_open_match(player_a: str, player_b: str) -> tuple[Page | No
         await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
         await page.wait_for_timeout(4000)
 
+        all_parts = a_parts + b_parts
         links = await page.query_selector_all('a[href*="/game/tennis/"]')
+
+        # First pass: try matching both players
+        best_link = None
+        best_score = 0
         for link in links:
             href = (await link.get_attribute("href") or "").lower()
-            a_match = any(p in href for p in a_parts)
-            b_match = any(p in href for p in b_parts)
-            if a_match and b_match:
-                match_url = await link.get_attribute("href") or ""
-                if not match_url.startswith("http"):
-                    match_url = f"https://www.flashscoreusa.com{match_url}"
+            a_match = sum(1 for p in a_parts if p in href)
+            b_match = sum(1 for p in b_parts if p in href)
+            score = a_match + b_match
+            if a_match > 0 and b_match > 0 and score > best_score:
+                best_score = score
+                best_link = link
 
-                await page.goto(match_url, timeout=15000)
-                await page.wait_for_timeout(5000)
+        # Fallback: if no dual match, try matching any single part with >= 4 chars
+        if not best_link:
+            long_parts = [p for p in all_parts if len(p) >= 4]
+            for link in links:
+                href = (await link.get_attribute("href") or "").lower()
+                matches = sum(1 for p in long_parts if p in href)
+                if matches > 0 and matches > best_score:
+                    best_score = matches
+                    best_link = link
 
-                real_a, real_b = await _read_page_player_names(page, match_url)
-                logger.info(f"Found match: {match_url} (HOME={real_a} vs AWAY={real_b})")
-                return page, real_a, real_b
+        if best_link:
+            match_url = await best_link.get_attribute("href") or ""
+            if not match_url.startswith("http"):
+                match_url = f"https://www.flashscoreusa.com{match_url}"
 
-        logger.warning(f"No match found for {player_a} vs {player_b}")
+            await page.goto(match_url, timeout=15000)
+            await page.wait_for_timeout(5000)
+
+            real_a, real_b = await _read_page_player_names(page, match_url)
+            logger.info(f"Found match: {match_url} (HOME={real_a} vs AWAY={real_b})")
+            return page, real_a, real_b
+
+        logger.warning(f"No match found for {player_a} vs {player_b} (parts: A={a_parts}, B={b_parts})")
         await page.close()
         return None, player_a, player_b
     except Exception as e:
