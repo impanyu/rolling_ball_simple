@@ -297,21 +297,26 @@ export default function SimulatorPage() {
 
                 {simResult && (
                     <>
-                        {/* Per-horizon small histograms */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                            {simResult.slices.map((slice) => (
-                                <div key={slice.horizon} style={{ minHeight: 300 }}>
-                                    <Histogram
-                                        data={toViewData(slice.histogram, slice.stats, slice.total_count)}
-                                        xLabel="P(win) %"
-                                        unit="%"
-                                        title={`After ${slice.horizon} pts`}
-                                        compact
-                                        currentProb={currentProb ?? undefined}
-                                    />
-                                </div>
-                            ))}
-                        </div>
+                        {/* Per-horizon small histograms (collapsible) */}
+                        <details style={{ marginBottom: 12 }}>
+                            <summary style={{ cursor: "pointer", fontWeight: 600, padding: "8px 0", color: "#555" }}>
+                                Per-horizon histograms ({simResult.slices.map(s => s.horizon).join(" / ")} pts)
+                            </summary>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 8 }}>
+                                {simResult.slices.map((slice) => (
+                                    <div key={slice.horizon} style={{ minHeight: 300 }}>
+                                        <Histogram
+                                            data={toViewData(slice.histogram, slice.stats, slice.total_count)}
+                                            xLabel="P(win) %"
+                                            unit="%"
+                                            title={`After ${slice.horizon} pts`}
+                                            compact
+                                            currentProb={currentProb ?? undefined}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </details>
 
                         {/* Weighted combined histogram */}
                         <div style={{ marginTop: 20 }}>
