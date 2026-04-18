@@ -214,12 +214,13 @@ async def lookup_match(req: LookupRequest):
 
 @router.post("/api/match-update")
 async def match_update(req: dict):
-    """Re-read FlashScore DOM, update p values with near/mid/far weighting."""
+    """Re-read FlashScore DOM. Only re-compute if score changed."""
     match_url = req.get("match_url", "")
     serve_a_prior = req.get("serve_a_prior", {})
     serve_b_prior = req.get("serve_b_prior", {})
     stats_history = req.get("stats_history", [])
     first_server = req.get("first_server", "a")
+    prev_score = req.get("prev_score")
     num_simulations = req.get("num_simulations", 100_000)
 
     from app.scraper.browser import get_browser
@@ -247,6 +248,10 @@ async def match_update(req: dict):
         "serving": score_data["serving"],
     }
 
+    # Skip full computation if score hasn't changed
+    if prev_score and score == prev_score:
+        return {"changed": False, "current_score": score}
+
     stats = await read_match_stats(match_page)
 
     # Multi-scale p: far (prior) + mid (match total) + near (sliding window)
@@ -270,6 +275,7 @@ async def match_update(req: dict):
         total_points = stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0)
 
     return {
+        "changed": True,
         "current_score": score,
         "total_points": total_points,
         "p_a_updated": round(p_a, 4),

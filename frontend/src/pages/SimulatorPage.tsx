@@ -98,9 +98,11 @@ export default function SimulatorPage() {
         if (!lookup?.match_url) return;
         try {
             const update = await fetchMatchUpdate(
-                lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory, firstServer
+                lookup.match_url, lookup.serve_a_prior, lookup.serve_b_prior, statsHistory, firstServer,
+                lookup.current_score
             );
             if (update.error) return;
+            if (!update.changed) return; // Score unchanged, skip
             if (update.match_stats) {
                 setStatsHistory(prev => [...prev, update.match_stats!]);
             }
@@ -147,7 +149,7 @@ export default function SimulatorPage() {
             setAutoUpdating(false);
         } else {
             doAutoUpdate();
-            intervalRef.current = setInterval(doAutoUpdate, 30000);
+            intervalRef.current = setInterval(doAutoUpdate, 5000);
             setAutoUpdating(true);
         }
     };
