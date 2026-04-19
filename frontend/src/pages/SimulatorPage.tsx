@@ -407,13 +407,39 @@ export default function SimulatorPage() {
                     const displayData = isFlipped
                         ? { total_count: src.total_count, histogram: flipHistogram(src.histogram), stats: flipStats(src.stats) }
                         : { total_count: src.total_count, histogram: src.histogram, stats: src.stats };
-                    return <Histogram
-                        data={displayData}
-                        xLabel="Max P(win) %"
-                        unit="%"
-                        title={`Max Win Probability in next 100 pts — ${viewName}`}
-                        currentProb={currentProb ?? undefined}
-                    />;
+                    const threshold = (currentProb ?? 50) + 10;
+                    const aboveSum = displayData.histogram
+                        .filter(b => b.bin_start >= threshold)
+                        .reduce((s, b) => s + b.percentage, 0);
+                    const belowSum = displayData.histogram
+                        .filter(b => b.bin_start < threshold)
+                        .reduce((s, b) => s + b.percentage, 0);
+                    const ratio = belowSum > 0 ? (aboveSum / belowSum) : aboveSum > 0 ? Infinity : 0;
+
+                    return <>
+                        <Histogram
+                            data={displayData}
+                            xLabel="Max P(win) %"
+                            unit="%"
+                            title={`Max Win Probability in next 100 pts — ${viewName}`}
+                            currentProb={currentProb ?? undefined}
+                        />
+                        <div style={{ marginTop: 8, padding: 12, border: "1px solid #ddd", borderRadius: 8, fontSize: 14 }}>
+                            <strong>Optimism ratio</strong> (threshold: current + 10% = {threshold.toFixed(1)}%)
+                            <div style={{ marginTop: 4 }}>
+                                P(max &ge; {threshold.toFixed(1)}%) = <strong>{aboveSum.toFixed(1)}%</strong>
+                                {" / "}
+                                P(max &lt; {threshold.toFixed(1)}%) = <strong>{belowSum.toFixed(1)}%</strong>
+                                {" = "}
+                                <strong style={{ color: ratio >= 1 ? "#27ae60" : "#e74c3c", fontSize: 18 }}>
+                                    {ratio === Infinity ? "∞" : ratio.toFixed(2)}
+                                </strong>
+                                <span style={{ color: "#888", marginLeft: 8 }}>
+                                    {ratio >= 1 ? "(bullish)" : "(bearish)"}
+                                </span>
+                            </div>
+                        </div>
+                    </>;
                 })()}
 
                 {simTab === "timeslice" && simResult && (
