@@ -1,61 +1,8 @@
-WINDOW_SIZE = 50
+PRIOR_POINTS = 50
 
 
 def compute_p(first_in: float, first_won: float, second_won: float) -> float:
     return first_in * first_won + (1 - first_in) * second_won
-
-
-def _get_match_window_stats(
-    current_stats: dict,
-    stats_history: list[dict],
-    prefix: str,
-) -> dict:
-    """Get serve stats for a sliding window from match data.
-
-    If match has <= WINDOW_SIZE serves, return all match data.
-    If match has > WINDOW_SIZE serves, find snapshot ~WINDOW_SIZE ago and return delta.
-    """
-    current_1st_total = current_stats.get(f"{prefix}_1st_serve_total", 0)
-    current_1st_won = current_stats.get(f"{prefix}_1st_serve_won", 0)
-    current_2nd_total = current_stats.get(f"{prefix}_2nd_serve_total", 0)
-    current_2nd_won = current_stats.get(f"{prefix}_2nd_serve_won", 0)
-    current_total = current_1st_total + current_2nd_total
-
-    if current_total <= WINDOW_SIZE or not stats_history:
-        return {
-            "1st_total": current_1st_total,
-            "1st_won": current_1st_won,
-            "2nd_total": current_2nd_total,
-            "2nd_won": current_2nd_won,
-            "total": current_total,
-        }
-
-    target = current_total - WINDOW_SIZE
-    best_snap = None
-    best_diff = float("inf")
-    for snap in stats_history:
-        snap_total = snap.get(f"{prefix}_1st_serve_total", 0) + snap.get(f"{prefix}_2nd_serve_total", 0)
-        diff = abs(snap_total - target)
-        if diff < best_diff:
-            best_diff = diff
-            best_snap = snap
-
-    if not best_snap:
-        return {
-            "1st_total": current_1st_total,
-            "1st_won": current_1st_won,
-            "2nd_total": current_2nd_total,
-            "2nd_won": current_2nd_won,
-            "total": current_total,
-        }
-
-    return {
-        "1st_total": max(0, current_1st_total - best_snap.get(f"{prefix}_1st_serve_total", 0)),
-        "1st_won": max(0, current_1st_won - best_snap.get(f"{prefix}_1st_serve_won", 0)),
-        "2nd_total": max(0, current_2nd_total - best_snap.get(f"{prefix}_2nd_serve_total", 0)),
-        "2nd_won": max(0, current_2nd_won - best_snap.get(f"{prefix}_2nd_serve_won", 0)),
-        "total": max(0, current_total - (best_snap.get(f"{prefix}_1st_serve_total", 0) + best_snap.get(f"{prefix}_2nd_serve_total", 0))),
-    }
 
 
 def multi_scale_p(
@@ -64,12 +11,11 @@ def multi_scale_p(
     stats_history: list[dict] | None,
     prefix: str,
 ) -> dict:
-    """Compute p using a fixed 50-point window that transitions from season to match data.
+    """Compute p using fixed 50-point prior + cumulative match data.
 
-    - Match start: 50 points all from season prior
-    - During match: (50 - match_serves) prior + match_serves match data
-    - After 50 serves: pure sliding window of last 50 match serves
-    Each component (first_in, first_won, second_won) weighted separately.
+    Prior: 50 virtual points from Tennis Abstract (fixed, never removed).
+    Match: all cumulative serve data from the current match (no window cap).
+    Each component weighted by point count: prior 50 + match N.
     """
     far_fi = prior_serve.get("first_in", 0.60)
     far_fw = prior_serve.get("first_won", 0.70)
@@ -84,30 +30,24 @@ def multi_scale_p(
             "p_serve": p_far,
             "p_far": p_far,
             "window_size": 0,
-            "prior_pts": WINDOW_SIZE,
-            "match_pts": 0,
         }
 
-    window = _get_match_window_stats(match_stats, stats_history or [], prefix)
-    match_serves = window["total"]
+    # Get cumulative match stats
+    match_1st_total = match_stats.get(f"{prefix}_1st_serve_total", 0)
+    match_1st_won = match_stats.get(f"{prefix}_1st_serve_won", 0)
+    match_2nd_total = match_stats.get(f"{prefix}_2nd_serve_total", 0)
+    match_2nd_won = match_stats.get(f"{prefix}_2nd_serve_won", 0)
+    match_serves = match_1st_total + match_2nd_total
 
-    # How many prior points to mix in
-    prior_pts = max(0, WINDOW_SIZE - match_serves)
+    # Compute match component rates
+    match_fi = match_1st_total / match_serves if match_serves > 0 else far_fi
+    match_fw = match_1st_won / match_1st_total if match_1st_total > 0 else far_fw
+    match_sw = match_2nd_won / match_2nd_total if match_2nd_total > 0 else far_sw
 
-    # Compute match component rates from window
-    match_total_serves = window["1st_total"] + window["2nd_total"]
-    match_fi = window["1st_total"] / match_total_serves if match_total_serves > 0 else far_fi
-    match_fw = window["1st_won"] / window["1st_total"] if window["1st_total"] > 0 else far_fw
-    match_sw = window["2nd_won"] / window["2nd_total"] if window["2nd_total"] > 0 else far_sw
-
-    # Weighted average: prior_pts from season + match_serves from match
-    total_pts = prior_pts + match_serves
-    if total_pts > 0:
-        w_prior = prior_pts / total_pts
-        w_match = match_serves / total_pts
-    else:
-        w_prior = 1.0
-        w_match = 0.0
+    # Weighted average: 50 prior points + match_serves match points
+    total_pts = PRIOR_POINTS + match_serves
+    w_prior = PRIOR_POINTS / total_pts
+    w_match = match_serves / total_pts
 
     fi = w_prior * far_fi + w_match * match_fi
     fw = w_prior * far_fw + w_match * match_fw
@@ -122,8 +62,6 @@ def multi_scale_p(
         "p_serve": round(p_updated, 4),
         "p_far": round(p_far, 4),
         "window_size": match_serves,
-        "prior_pts": prior_pts,
-        "match_pts": match_serves,
     }
 
 
