@@ -197,15 +197,14 @@ export default function SimulatorPage() {
         ? (isFlipped ? 100 - simResult.current_win_prob : simResult.current_win_prob)
         : null;
 
-    // Compute bullish ratio from max_prob
+    // Compute optimism: P(max >= threshold) where threshold = min(floor((current+20)/5)*5, 95)
+    const optimismThreshold = currentProb != null ? Math.min(Math.floor((currentProb + 20) / 5) * 5, 95) : null;
     const bullishRatio = (() => {
-        if (!maxResult || currentProb == null) return null;
+        if (!maxResult || currentProb == null || optimismThreshold == null) return null;
         const src = isFlipped ? maxResult.min_prob_a : maxResult.max_prob_a;
         const hist = isFlipped ? flipHistogram(src.histogram) : src.histogram;
-        const currentBin = Math.floor(currentProb / 5) * 5;
-        const above = hist.filter(b => b.bin_start > currentBin).reduce((s, b) => s + b.percentage, 0);
-        const below = hist.filter(b => b.bin_start <= currentBin).reduce((s, b) => s + b.percentage, 0);
-        return below > 0 ? above / below : above > 0 ? Infinity : 0;
+        const above = hist.filter(b => b.bin_start >= optimismThreshold).reduce((s, b) => s + b.percentage, 0);
+        return above;
     })();
 
     // Compute delta E from combined histogram
@@ -429,14 +428,10 @@ export default function SimulatorPage() {
                     const displayData = isFlipped
                         ? { total_count: src.total_count, histogram: flipHistogram(src.histogram), stats: flipStats(src.stats) }
                         : { total_count: src.total_count, histogram: src.histogram, stats: src.stats };
-                    const currentBin = Math.floor((currentProb ?? 50) / 5) * 5;
+                    const threshold = Math.min(Math.floor(((currentProb ?? 50) + 20) / 5) * 5, 95);
                     const aboveSum = displayData.histogram
-                        .filter(b => b.bin_start > currentBin)
+                        .filter(b => b.bin_start >= threshold)
                         .reduce((s, b) => s + b.percentage, 0);
-                    const belowSum = displayData.histogram
-                        .filter(b => b.bin_start <= currentBin)
-                        .reduce((s, b) => s + b.percentage, 0);
-                    const ratio = belowSum > 0 ? (aboveSum / belowSum) : aboveSum > 0 ? Infinity : 0;
 
                     return <>
                         <Histogram
@@ -447,18 +442,12 @@ export default function SimulatorPage() {
                             currentProb={currentProb ?? undefined}
                         />
                         <div style={{ marginTop: 8, padding: 12, border: "1px solid #ddd", borderRadius: 8, fontSize: 14 }}>
-                            <strong>Optimism ratio</strong> (current: {(currentProb ?? 50).toFixed(1)}%, bin: {currentBin}%)
+                            <strong>P(upside)</strong> — current: {(currentProb ?? 50).toFixed(1)}%, threshold: {threshold}%
                             <div style={{ marginTop: 4 }}>
-                                P(max &gt; {currentBin}%) = <strong>{aboveSum.toFixed(1)}%</strong>
-                                {" / "}
-                                P(max &le; {currentBin}%) = <strong>{belowSum.toFixed(1)}%</strong>
-                                {" = "}
-                                <strong style={{ color: ratio >= 1 ? "#27ae60" : "#e74c3c", fontSize: 18 }}>
-                                    {ratio === Infinity ? "∞" : ratio.toFixed(2)}
+                                P(max &ge; {threshold}%) = {" "}
+                                <strong style={{ color: aboveSum >= 50 ? "#27ae60" : "#e74c3c", fontSize: 18 }}>
+                                    {aboveSum.toFixed(1)}%
                                 </strong>
-                                <span style={{ color: "#888", marginLeft: 8 }}>
-                                    {ratio >= 1 ? "(bullish)" : "(bearish)"}
-                                </span>
                             </div>
                         </div>
                     </>;

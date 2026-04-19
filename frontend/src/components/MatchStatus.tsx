@@ -94,8 +94,8 @@ export default function MatchStatus({
                     Current P({viewName} wins):{" "}
                     <strong>{displayProb.toFixed(1)}%</strong>
                     {bullishRatio != null && (
-                        <span style={{ marginLeft: 16, fontSize: 14, color: bullishRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
-                            Bullish: <strong>{bullishRatio === Infinity ? "∞" : bullishRatio.toFixed(2)}</strong>
+                        <span style={{ marginLeft: 16, fontSize: 14, color: bullishRatio >= 50 ? "#27ae60" : "#e74c3c" }}>
+                            P(upside): <strong>{bullishRatio.toFixed(1)}%</strong>
                         </span>
                     )}
                     {combinedDelta != null && (
