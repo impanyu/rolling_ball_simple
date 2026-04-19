@@ -109,17 +109,17 @@ export default function MatchStatus({
                         const oppMax = viewPlayer === "a" ? pMaxUpsideB : pMaxUpsideA;
                         const myUp = viewPlayer === "a" ? pUpsideA : pUpsideB;
                         const oppUp = viewPlayer === "a" ? pUpsideB : pUpsideA;
-                        const maxRatio = myMax != null && oppMax != null && oppMax > 0 ? myMax / oppMax : null;
-                        const upRatio = myUp != null && oppUp != null && oppUp > 0 ? myUp / oppUp : null;
+                        const maxRatio = myMax != null && oppMax != null ? (oppMax > 0 ? myMax / oppMax : myMax > 0 ? Infinity : 0) : null;
+                        const upRatio = myUp != null && oppUp != null ? (oppUp > 0 ? myUp / oppUp : myUp > 0 ? Infinity : 0) : null;
                         return <>
                             {maxRatio != null && (
                                 <span style={{ marginLeft: 16, fontSize: 14, color: maxRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
-                                    P(max up) ratio: <strong>{maxRatio.toFixed(2)}</strong>
+                                    P(max up) ratio: <strong>{maxRatio === Infinity ? "∞" : maxRatio.toFixed(2)}</strong>
                                 </span>
                             )}
                             {upRatio != null && (
                                 <span style={{ marginLeft: 16, fontSize: 14, color: upRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
-                                    P(up) ratio: <strong>{upRatio.toFixed(2)}</strong>
+                                    P(up) ratio: <strong>{upRatio === Infinity ? "∞" : upRatio.toFixed(2)}</strong>
                                 </span>
                             )}
                         </>;
