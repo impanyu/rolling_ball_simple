@@ -9,8 +9,8 @@ interface Props {
     viewPlayer: "a" | "b";
     autoUpdating: boolean;
     onToggleAutoUpdate: () => void;
-    bullishRatio?: number | null;
-    pUpside?: number | null;
+    pMaxUpsideRatio?: number | null;
+    pUpsideRatio?: number | null;
     combinedDelta?: number | null;
 }
 
@@ -30,7 +30,7 @@ function formatScore(score: ScoreState, _playerA: string, _playerB: string): str
 
 export default function MatchStatus({
     lookup, pA, pB, onPChange, currentWinProb, viewPlayer, autoUpdating, onToggleAutoUpdate,
-    bullishRatio, pUpside, combinedDelta,
+    pMaxUpsideRatio, pUpsideRatio, combinedDelta,
 }: Props) {
     const viewName = viewPlayer === "a" ? lookup.player_a.split(" ").pop() : lookup.player_b.split(" ").pop();
     const displayProb = currentWinProb !== null
@@ -94,14 +94,14 @@ export default function MatchStatus({
                 <div style={{ fontSize: 18, marginTop: 12 }}>
                     Current P({viewName} wins):{" "}
                     <strong>{displayProb.toFixed(1)}%</strong>
-                    {bullishRatio != null && (
-                        <span style={{ marginLeft: 16, fontSize: 14, color: bullishRatio >= 50 ? "#27ae60" : "#e74c3c" }}>
-                            P(max upside): <strong>{bullishRatio.toFixed(1)}%</strong>
+                    {pMaxUpsideRatio != null && (
+                        <span style={{ marginLeft: 16, fontSize: 14, color: pMaxUpsideRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
+                            P(max upside) ratio: <strong>{pMaxUpsideRatio.toFixed(2)}</strong>
                         </span>
                     )}
-                    {pUpside != null && (
-                        <span style={{ marginLeft: 16, fontSize: 14, color: pUpside >= 50 ? "#27ae60" : "#e74c3c" }}>
-                            P(upside): <strong>{pUpside.toFixed(1)}%</strong>
+                    {pUpsideRatio != null && (
+                        <span style={{ marginLeft: 16, fontSize: 14, color: pUpsideRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
+                            P(upside) ratio: <strong>{pUpsideRatio.toFixed(2)}</strong>
                         </span>
                     )}
                     {combinedDelta != null && (

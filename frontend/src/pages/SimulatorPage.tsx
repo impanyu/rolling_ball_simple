@@ -197,24 +197,42 @@ export default function SimulatorPage() {
         ? (isFlipped ? 100 - simResult.current_win_prob : simResult.current_win_prob)
         : null;
 
-    // Compute optimism: P(max >= threshold) where threshold = min(floor((current+20)/5)*5, 95)
-    const optimismThreshold = currentProb != null ? Math.min(Math.floor((currentProb + 20) / 5) * 5, 95) : null;
-    const bullishRatio = (() => {
-        if (!maxResult || currentProb == null || optimismThreshold == null) return null;
-        const src = isFlipped ? maxResult.min_prob_a : maxResult.max_prob_a;
-        const hist = isFlipped ? flipHistogram(src.histogram) : src.histogram;
-        const above = hist.filter(b => b.bin_start >= optimismThreshold).reduce((s, b) => s + b.percentage, 0);
-        return above;
+    // Compute P(max upside) and P(upside) for BOTH players, then ratio
+    const probA = simResult ? simResult.current_win_prob : null;
+    const probB = probA != null ? 100 - probA : null;
+    const thresholdA = probA != null ? Math.min(Math.floor((probA + 20) / 5) * 5, 95) : null;
+    const thresholdB = probB != null ? Math.min(Math.floor((probB + 20) / 5) * 5, 95) : null;
+
+    const pMaxUpsideA = (() => {
+        if (!maxResult || thresholdA == null) return null;
+        return maxResult.max_prob_a.histogram.filter(b => b.bin_start >= thresholdA).reduce((s, b) => s + b.percentage, 0);
+    })();
+    const pMaxUpsideB = (() => {
+        if (!maxResult || thresholdB == null) return null;
+        const hist = flipHistogram(maxResult.min_prob_a.histogram);
+        return hist.filter(b => b.bin_start >= thresholdB).reduce((s, b) => s + b.percentage, 0);
     })();
 
-    // Compute P(upside) from combined histogram: P(score >= threshold)
-    const pUpside = (() => {
-        if (!simResult || currentProb == null || optimismThreshold == null) return null;
-        const hist = isFlipped ? flipHistogram(simResult.combined.histogram) : simResult.combined.histogram;
-        return hist.filter(b => b.bin_start >= optimismThreshold).reduce((s, b) => s + b.percentage, 0);
+    const pUpsideA = (() => {
+        if (!simResult || thresholdA == null) return null;
+        return simResult.combined.histogram.filter(b => b.bin_start >= thresholdA).reduce((s, b) => s + b.percentage, 0);
+    })();
+    const pUpsideB = (() => {
+        if (!simResult || thresholdB == null) return null;
+        const hist = flipHistogram(simResult.combined.histogram);
+        return hist.filter(b => b.bin_start >= thresholdB).reduce((s, b) => s + b.percentage, 0);
     })();
 
-    // Compute delta E from combined histogram
+    // Ratios: viewed player / opponent
+    const myMaxUpside = isFlipped ? pMaxUpsideB : pMaxUpsideA;
+    const oppMaxUpside = isFlipped ? pMaxUpsideA : pMaxUpsideB;
+    const pMaxUpsideRatio = (myMaxUpside != null && oppMaxUpside != null && oppMaxUpside > 0) ? myMaxUpside / oppMaxUpside : null;
+
+    const myUpside = isFlipped ? pUpsideB : pUpsideA;
+    const oppUpside = isFlipped ? pUpsideA : pUpsideB;
+    const pUpsideRatio = (myUpside != null && oppUpside != null && oppUpside > 0) ? myUpside / oppUpside : null;
+
+    // Delta E from combined histogram
     const combinedDelta = (() => {
         if (!simResult || currentProb == null) return null;
         const combined = isFlipped
@@ -248,8 +266,8 @@ export default function SimulatorPage() {
                         currentWinProb={simResult?.current_win_prob ?? null}
                         viewPlayer={viewPlayer}
                         autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate}
-                        bullishRatio={bullishRatio}
-                        pUpside={pUpside}
+                        pMaxUpsideRatio={pMaxUpsideRatio}
+                        pUpsideRatio={pUpsideRatio}
                         combinedDelta={combinedDelta} />
                 </div>
             )}
