@@ -97,20 +97,18 @@ async def read_match_score(page: Page) -> dict | None:
         # Check for tiebreak
         is_tiebreak = "tiebreak" in info_text.lower()
 
-        # Extract point score from "( X : Y )" — works for both regular games and tiebreaks
+        # Extract point score from "( X : Y )" — handles numbers, "A" (advantage), tiebreak
         points_a, points_b = 0, 0
-        pts_match = re.search(r'\(\s*(\d+)\s*:\s*(\d+)\s*\)', info_text)
+        pts_match = re.search(r'\(\s*(\w+)\s*:\s*(\w+)\s*\)', info_text)
         if pts_match:
-            raw_a, raw_b = int(pts_match.group(1)), int(pts_match.group(2))
+            raw_a_str, raw_b_str = pts_match.group(1), pts_match.group(2)
             if is_tiebreak:
-                points_a, points_b = raw_a, raw_b
+                points_a = int(raw_a_str) if raw_a_str.isdigit() else 0
+                points_b = int(raw_b_str) if raw_b_str.isdigit() else 0
             else:
-                # Map tennis game scores (0,15,30,40) to engine encoding (0,1,2,3)
-                score_map = {0: 0, 15: 1, 30: 2, 40: 3}
-                points_a = score_map.get(raw_a, 3)
-                points_b = score_map.get(raw_b, 3)
-                # Handle advantage: if one has 40 and other has AD (shown as 40:A or similar)
-                # In FlashScore both show as numbers, deuce is 40:40 → 3:3
+                score_map = {"0": 0, "15": 1, "30": 2, "40": 3, "A": 4}
+                points_a = score_map.get(raw_a_str, 3)
+                points_b = score_map.get(raw_b_str, 3)
 
         # Determine who is serving
         serving = "a"
