@@ -21,9 +21,7 @@ function formatScore(score: ScoreState, _playerA: string, _playerB: string): str
     const isTiebreak = score.games[0] === 6 && score.games[1] === 6;
     const points = isTiebreak
         ? `${pa}-${pb} (tiebreak)`
-        : pa <= 3 && pb <= 3
-            ? `${POINT_LABELS[pa] || pa}-${POINT_LABELS[pb] || pb}`
-            : `${pa}-${pb}`;
+        : `${POINT_LABELS[pa] ?? pa}-${POINT_LABELS[pb] ?? pb}`;
     return `Sets: ${sets}  Games: ${games}  Points: ${points}`;
 }
 
