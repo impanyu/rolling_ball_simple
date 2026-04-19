@@ -9,6 +9,8 @@ interface Props {
     viewPlayer: "a" | "b";
     autoUpdating: boolean;
     onToggleAutoUpdate: () => void;
+    bullishRatio?: number | null;
+    combinedDelta?: number | null;
 }
 
 const POINT_LABELS = ["0", "15", "30", "40", "AD"];
@@ -26,7 +28,8 @@ function formatScore(score: ScoreState, _playerA: string, _playerB: string): str
 }
 
 export default function MatchStatus({
-    lookup, pA, pB, onPChange, currentWinProb, viewPlayer, autoUpdating, onToggleAutoUpdate
+    lookup, pA, pB, onPChange, currentWinProb, viewPlayer, autoUpdating, onToggleAutoUpdate,
+    bullishRatio, combinedDelta,
 }: Props) {
     const viewName = viewPlayer === "a" ? lookup.player_a.split(" ").pop() : lookup.player_b.split(" ").pop();
     const displayProb = currentWinProb !== null
@@ -87,10 +90,20 @@ export default function MatchStatus({
                 </tbody>
             </table>
             {displayProb !== null && (
-                <p style={{ fontSize: 18, marginTop: 12 }}>
+                <div style={{ fontSize: 18, marginTop: 12 }}>
                     Current P({viewName} wins):{" "}
                     <strong>{displayProb.toFixed(1)}%</strong>
-                </p>
+                    {bullishRatio != null && (
+                        <span style={{ marginLeft: 16, fontSize: 14, color: bullishRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
+                            Bullish: <strong>{bullishRatio === Infinity ? "∞" : bullishRatio.toFixed(2)}</strong>
+                        </span>
+                    )}
+                    {combinedDelta != null && (
+                        <span style={{ marginLeft: 16, fontSize: 14, color: combinedDelta >= 0 ? "#27ae60" : "#e74c3c" }}>
+                            &Delta;E: <strong>{combinedDelta >= 0 ? "+" : ""}{combinedDelta.toFixed(1)}%</strong>
+                        </span>
+                    )}
+                </div>
             )}
             {lookup.match_found && (
                 <div style={{ marginTop: 12 }}>

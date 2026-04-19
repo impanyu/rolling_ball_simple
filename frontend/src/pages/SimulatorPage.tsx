@@ -197,6 +197,26 @@ export default function SimulatorPage() {
         ? (isFlipped ? 100 - simResult.current_win_prob : simResult.current_win_prob)
         : null;
 
+    // Compute bullish ratio from max_prob
+    const bullishRatio = (() => {
+        if (!maxResult || currentProb == null) return null;
+        const src = isFlipped ? maxResult.min_prob_a : maxResult.max_prob_a;
+        const hist = isFlipped ? flipHistogram(src.histogram) : src.histogram;
+        const currentBin = Math.floor(currentProb / 5) * 5;
+        const above = hist.filter(b => b.bin_start > currentBin).reduce((s, b) => s + b.percentage, 0);
+        const below = hist.filter(b => b.bin_start <= currentBin).reduce((s, b) => s + b.percentage, 0);
+        return below > 0 ? above / below : above > 0 ? Infinity : 0;
+    })();
+
+    // Compute delta E from combined histogram
+    const combinedDelta = (() => {
+        if (!simResult || currentProb == null) return null;
+        const combined = isFlipped
+            ? flipStats(simResult.combined.stats)
+            : simResult.combined.stats;
+        return combined.mean - currentProb;
+    })();
+
     const viewHistory = probHistory.map(pt => ({
         points: pt.points,
         prob: isFlipped ? 100 - pt.prob : pt.prob,
@@ -221,7 +241,9 @@ export default function SimulatorPage() {
                     <MatchStatus lookup={lookup} pA={pA} pB={pB} onPChange={handlePChange}
                         currentWinProb={simResult?.current_win_prob ?? null}
                         viewPlayer={viewPlayer}
-                        autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate} />
+                        autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate}
+                        bullishRatio={bullishRatio}
+                        combinedDelta={combinedDelta} />
                 </div>
             )}
 
