@@ -27,7 +27,7 @@ export async function lookupMatch(playerInput: string): Promise<LookupResult> {
 }
 
 export async function runSimulation(
-    p_a: number, p_b: number, score: ScoreState, firstServer: string = "a", num_simulations: number = 100000
+    p_a: number, p_b: number, score: ScoreState, firstServer: string = "a", num_simulations: number = 10000
 ): Promise<SimulateResult> {
     const resp = await fetch("/api/simulate", {
         method: "POST",
@@ -41,7 +41,7 @@ export async function runSimulation(
 import type { ServeComponents } from "./types";
 
 export async function runSimulateMax(
-    p_a: number, p_b: number, score: ScoreState, firstServer: string = "a", num_simulations: number = 100000
+    p_a: number, p_b: number, score: ScoreState, firstServer: string = "a", num_simulations: number = 10000
 ): Promise<QueryResponse & { current_win_prob: number }> {
     const resp = await fetch("/api/simulate-max", {
         method: "POST",
@@ -72,7 +72,7 @@ export async function fetchMatchUpdate(
     firstServer: string = "a",
     prevScore: ScoreState | null = null,
     simMode: string = "timeslice",
-    num_simulations: number = 100000
+    num_simulations: number = 10000
 ): Promise<MatchUpdateResult> {
     const resp = await fetch("/api/match-update", {
         method: "POST",

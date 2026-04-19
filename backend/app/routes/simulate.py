@@ -24,7 +24,7 @@ class SimulateRequest(BaseModel):
     p_b: float
     score: ScoreInput
     first_server: str = "a"
-    num_simulations: int = 100_000
+    num_simulations: int = 10_000
 
 
 class LookupRequest(BaseModel):
@@ -232,7 +232,7 @@ async def _do_match_update(req: dict):
     stats_history = req.get("stats_history", [])
     first_server = req.get("first_server", "a")
     prev_score = req.get("prev_score")
-    num_simulations = req.get("num_simulations", 100_000)
+    num_simulations = req.get("num_simulations", 10_000)
 
     from app.scraper.browser import get_browser
     from app.scraper.flashscore import read_match_score, read_match_stats
