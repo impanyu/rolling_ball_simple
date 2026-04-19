@@ -266,11 +266,8 @@ export default function SimulatorPage() {
                                         setLookup(prev => prev ? {
                                             ...prev,
                                             serve_a_prior: { ...res.serve_stats, is_default: undefined },
-                                            serve_a_updated: { ...res.serve_stats, is_default: undefined },
                                             p_a_prior: res.serve_stats.p_serve,
-                                            p_a_updated: res.serve_stats.p_serve,
                                         } : prev);
-                                        setPA(res.serve_stats.p_serve);
                                     }
                                 }
                                 if (urlB && lookup.serve_b_prior?.is_default) {
@@ -279,11 +276,8 @@ export default function SimulatorPage() {
                                         setLookup(prev => prev ? {
                                             ...prev,
                                             serve_b_prior: { ...res.serve_stats, is_default: undefined },
-                                            serve_b_updated: { ...res.serve_stats, is_default: undefined },
                                             p_b_prior: res.serve_stats.p_serve,
-                                            p_b_updated: res.serve_stats.p_serve,
                                         } : prev);
-                                        setPB(res.serve_stats.p_serve);
                                     }
                                 }
                                 // Re-run simulation with new p values
