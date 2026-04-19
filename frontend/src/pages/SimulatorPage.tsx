@@ -407,12 +407,12 @@ export default function SimulatorPage() {
                     const displayData = isFlipped
                         ? { total_count: src.total_count, histogram: flipHistogram(src.histogram), stats: flipStats(src.stats) }
                         : { total_count: src.total_count, histogram: src.histogram, stats: src.stats };
-                    const threshold = (currentProb ?? 50) + 15;
+                    const currentBin = Math.floor((currentProb ?? 50) / 5) * 5;
                     const aboveSum = displayData.histogram
-                        .filter(b => b.bin_start >= threshold)
+                        .filter(b => b.bin_start > currentBin)
                         .reduce((s, b) => s + b.percentage, 0);
                     const belowSum = displayData.histogram
-                        .filter(b => b.bin_start < threshold)
+                        .filter(b => b.bin_start <= currentBin)
                         .reduce((s, b) => s + b.percentage, 0);
                     const ratio = belowSum > 0 ? (aboveSum / belowSum) : aboveSum > 0 ? Infinity : 0;
 
@@ -425,11 +425,11 @@ export default function SimulatorPage() {
                             currentProb={currentProb ?? undefined}
                         />
                         <div style={{ marginTop: 8, padding: 12, border: "1px solid #ddd", borderRadius: 8, fontSize: 14 }}>
-                            <strong>Optimism ratio</strong> (threshold: current + 15% = {threshold.toFixed(1)}%)
+                            <strong>Optimism ratio</strong> (current: {(currentProb ?? 50).toFixed(1)}%, bin: {currentBin}%)
                             <div style={{ marginTop: 4 }}>
-                                P(max &ge; {threshold.toFixed(1)}%) = <strong>{aboveSum.toFixed(1)}%</strong>
+                                P(max &gt; {currentBin}%) = <strong>{aboveSum.toFixed(1)}%</strong>
                                 {" / "}
-                                P(max &lt; {threshold.toFixed(1)}%) = <strong>{belowSum.toFixed(1)}%</strong>
+                                P(max &le; {currentBin}%) = <strong>{belowSum.toFixed(1)}%</strong>
                                 {" = "}
                                 <strong style={{ color: ratio >= 1 ? "#27ae60" : "#e74c3c", fontSize: 18 }}>
                                     {ratio === Infinity ? "∞" : ratio.toFixed(2)}
