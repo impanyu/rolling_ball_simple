@@ -207,6 +207,7 @@ def simulate_combined(
     horizon_values: Dict[int, List[float]] = {h: [] for h in horizons}
     max_probs_a: List[float] = []
     min_probs_a: List[float] = []
+    all_probs: List[float] = []
     horizon_set = set(horizons)
 
     for sim_idx in range(n_simulations):
@@ -223,6 +224,7 @@ def simulate_combined(
                     path_max = terminal_prob
                 if terminal_prob < path_min:
                     path_min = terminal_prob
+                all_probs.append(terminal_prob * 100.0)
                 for h in horizons:
                     if h not in recorded_horizons:
                         horizon_values[h].append(terminal_prob * 100.0)
@@ -242,6 +244,8 @@ def simulate_combined(
                 path_max = prob
             if prob < path_min:
                 path_min = prob
+
+            all_probs.append(prob * 100.0)
 
             if point_idx in horizon_set and point_idx not in recorded_horizons:
                 horizon_values[point_idx].append(prob * 100.0)
@@ -266,33 +270,15 @@ def simulate_combined(
             "stats": _compute_stats(vals),
         })
 
-    # Build weighted combined histogram
-    weight_sum = sum(HORIZON_WEIGHTS.get(h, 1.0 / h) for h in horizons)
-    combined_bins = [0.0] * 20
-    for h in horizons:
-        w = HORIZON_WEIGHTS.get(h, 1.0 / h) / weight_sum
-        hist = _build_histogram(horizon_values[h])
-        for i, b in enumerate(hist):
-            combined_bins[i] += b["percentage"] * w
-
-    combined_histogram = [
-        {"bin_start": i * 5.0, "bin_end": (i + 1) * 5.0, "count": 0, "percentage": round(combined_bins[i], 2)}
-        for i in range(20)
-    ]
-
-    all_weighted: List[float] = []
-    for h in horizons:
-        w = HORIZON_WEIGHTS.get(h, 1.0 / h) / weight_sum
-        count = int(n_simulations * w)
-        all_weighted.extend(horizon_values[h][:count])
+    # Build combined histogram from ALL probabilities across all paths
 
     return {
         "current_win_prob": round(current_win_prob, 2),
         "slices": slices,
         "combined": {
-            "total_count": n_simulations,
-            "histogram": combined_histogram,
-            "stats": _compute_stats(all_weighted) if all_weighted else {"mean": 0, "median": 0, "std": 0},
+            "total_count": len(all_probs),
+            "histogram": _build_histogram(all_probs),
+            "stats": _compute_stats(all_probs) if all_probs else {"mean": 0, "median": 0, "std": 0},
         },
         "max_prob_a": {
             "total_count": n_simulations,
