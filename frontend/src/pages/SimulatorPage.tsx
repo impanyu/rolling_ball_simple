@@ -207,6 +207,13 @@ export default function SimulatorPage() {
         return above;
     })();
 
+    // Compute P(upside) from combined histogram: P(score >= threshold)
+    const pUpside = (() => {
+        if (!simResult || currentProb == null || optimismThreshold == null) return null;
+        const hist = isFlipped ? flipHistogram(simResult.combined.histogram) : simResult.combined.histogram;
+        return hist.filter(b => b.bin_start >= optimismThreshold).reduce((s, b) => s + b.percentage, 0);
+    })();
+
     // Compute delta E from combined histogram
     const combinedDelta = (() => {
         if (!simResult || currentProb == null) return null;
@@ -242,6 +249,7 @@ export default function SimulatorPage() {
                         viewPlayer={viewPlayer}
                         autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate}
                         bullishRatio={bullishRatio}
+                        pUpside={pUpside}
                         combinedDelta={combinedDelta} />
                 </div>
             )}
@@ -442,7 +450,7 @@ export default function SimulatorPage() {
                             currentProb={currentProb ?? undefined}
                         />
                         <div style={{ marginTop: 8, padding: 12, border: "1px solid #ddd", borderRadius: 8, fontSize: 14 }}>
-                            <strong>P(upside)</strong> — current: {(currentProb ?? 50).toFixed(1)}%, threshold: {threshold}%
+                            <strong>P(max upside)</strong> — current: {(currentProb ?? 50).toFixed(1)}%, threshold: {threshold}%
                             <div style={{ marginTop: 4 }}>
                                 P(max &ge; {threshold}%) = {" "}
                                 <strong style={{ color: aboveSum >= 50 ? "#27ae60" : "#e74c3c", fontSize: 18 }}>
