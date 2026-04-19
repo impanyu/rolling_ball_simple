@@ -9,8 +9,10 @@ interface Props {
     viewPlayer: "a" | "b";
     autoUpdating: boolean;
     onToggleAutoUpdate: () => void;
-    pMaxUpsideRatio?: number | null;
-    pUpsideRatio?: number | null;
+    pMaxUpsideA?: number | null;
+    pMaxUpsideB?: number | null;
+    pUpsideA?: number | null;
+    pUpsideB?: number | null;
     combinedDelta?: number | null;
 }
 
@@ -30,7 +32,7 @@ function formatScore(score: ScoreState, _playerA: string, _playerB: string): str
 
 export default function MatchStatus({
     lookup, pA, pB, onPChange, currentWinProb, viewPlayer, autoUpdating, onToggleAutoUpdate,
-    pMaxUpsideRatio, pUpsideRatio, combinedDelta,
+    pMaxUpsideA, pMaxUpsideB, pUpsideA, pUpsideB, combinedDelta,
 }: Props) {
     const viewName = viewPlayer === "a" ? lookup.player_a.split(" ").pop() : lookup.player_b.split(" ").pop();
     const displayProb = currentWinProb !== null
@@ -56,13 +58,15 @@ export default function MatchStatus({
                         <th style={{ padding: "4px 12px" }}>2nd Won</th>
                         <th style={{ padding: "4px 12px" }}>window</th>
                         <th style={{ padding: "4px 12px" }}>p</th>
+                        <th style={{ padding: "4px 12px" }}>P(max up)</th>
+                        <th style={{ padding: "4px 12px" }}>P(up)</th>
                     </tr>
                 </thead>
                 <tbody>
                     {[
-                        { name: lookup.player_a.split(" ").pop(), prior: lookup.serve_a_prior, updated: lookup.serve_a_updated, isA: true },
-                        { name: lookup.player_b.split(" ").pop(), prior: lookup.serve_b_prior, updated: lookup.serve_b_updated, isA: false },
-                    ].map(({ name, prior, updated, isA }) => (
+                        { name: lookup.player_a.split(" ").pop(), prior: lookup.serve_a_prior, updated: lookup.serve_a_updated, isA: true, maxUp: pMaxUpsideA, up: pUpsideA },
+                        { name: lookup.player_b.split(" ").pop(), prior: lookup.serve_b_prior, updated: lookup.serve_b_updated, isA: false, maxUp: pMaxUpsideB, up: pUpsideB },
+                    ].map(({ name, prior, updated, isA, maxUp, up }) => (
                         <tr key={name} style={{ borderBottom: "1px solid #eee" }}>
                             <td style={{ fontWeight: 600, padding: "4px 12px" }}>{name}</td>
                             <td style={{ padding: "4px 12px", textAlign: "center" }}>
@@ -86,6 +90,12 @@ export default function MatchStatus({
                                     onChange={(e) => isA ? onPChange(Number(e.target.value), pB) : onPChange(pA, Number(e.target.value))}
                                     style={{ width: 70, padding: "2px 6px" }} />
                             </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center", fontWeight: 600, color: maxUp != null && maxUp >= 50 ? "#27ae60" : "#e74c3c" }}>
+                                {maxUp != null ? `${maxUp.toFixed(1)}%` : "—"}
+                            </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center", fontWeight: 600, color: up != null && up >= 50 ? "#27ae60" : "#e74c3c" }}>
+                                {up != null ? `${up.toFixed(1)}%` : "—"}
+                            </td>
                         </tr>
                     ))}
                 </tbody>
@@ -94,16 +104,26 @@ export default function MatchStatus({
                 <div style={{ fontSize: 18, marginTop: 12 }}>
                     Current P({viewName} wins):{" "}
                     <strong>{displayProb.toFixed(1)}%</strong>
-                    {pMaxUpsideRatio != null && (
-                        <span style={{ marginLeft: 16, fontSize: 14, color: pMaxUpsideRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
-                            P(max upside) ratio: <strong>{pMaxUpsideRatio.toFixed(2)}</strong>
-                        </span>
-                    )}
-                    {pUpsideRatio != null && (
-                        <span style={{ marginLeft: 16, fontSize: 14, color: pUpsideRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
-                            P(upside) ratio: <strong>{pUpsideRatio.toFixed(2)}</strong>
-                        </span>
-                    )}
+                    {(() => {
+                        const myMax = viewPlayer === "a" ? pMaxUpsideA : pMaxUpsideB;
+                        const oppMax = viewPlayer === "a" ? pMaxUpsideB : pMaxUpsideA;
+                        const myUp = viewPlayer === "a" ? pUpsideA : pUpsideB;
+                        const oppUp = viewPlayer === "a" ? pUpsideB : pUpsideA;
+                        const maxRatio = myMax != null && oppMax != null && oppMax > 0 ? myMax / oppMax : null;
+                        const upRatio = myUp != null && oppUp != null && oppUp > 0 ? myUp / oppUp : null;
+                        return <>
+                            {maxRatio != null && (
+                                <span style={{ marginLeft: 16, fontSize: 14, color: maxRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
+                                    P(max up) ratio: <strong>{maxRatio.toFixed(2)}</strong>
+                                </span>
+                            )}
+                            {upRatio != null && (
+                                <span style={{ marginLeft: 16, fontSize: 14, color: upRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
+                                    P(up) ratio: <strong>{upRatio.toFixed(2)}</strong>
+                                </span>
+                            )}
+                        </>;
+                    })()}
                     {combinedDelta != null && (
                         <span style={{ marginLeft: 16, fontSize: 14, color: combinedDelta >= 0 ? "#27ae60" : "#e74c3c" }}>
                             &Delta;E: <strong>{combinedDelta >= 0 ? "+" : ""}{combinedDelta.toFixed(1)}%</strong>

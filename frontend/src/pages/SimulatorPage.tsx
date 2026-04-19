@@ -223,15 +223,6 @@ export default function SimulatorPage() {
         return hist.filter(b => b.bin_start >= thresholdB).reduce((s, b) => s + b.percentage, 0);
     })();
 
-    // Ratios: viewed player / opponent
-    const myMaxUpside = isFlipped ? pMaxUpsideB : pMaxUpsideA;
-    const oppMaxUpside = isFlipped ? pMaxUpsideA : pMaxUpsideB;
-    const pMaxUpsideRatio = (myMaxUpside != null && oppMaxUpside != null && oppMaxUpside > 0) ? myMaxUpside / oppMaxUpside : null;
-
-    const myUpside = isFlipped ? pUpsideB : pUpsideA;
-    const oppUpside = isFlipped ? pUpsideA : pUpsideB;
-    const pUpsideRatio = (myUpside != null && oppUpside != null && oppUpside > 0) ? myUpside / oppUpside : null;
-
     // Delta E from combined histogram
     const combinedDelta = (() => {
         if (!simResult || currentProb == null) return null;
@@ -266,8 +257,10 @@ export default function SimulatorPage() {
                         currentWinProb={simResult?.current_win_prob ?? null}
                         viewPlayer={viewPlayer}
                         autoUpdating={autoUpdating} onToggleAutoUpdate={toggleAutoUpdate}
-                        pMaxUpsideRatio={pMaxUpsideRatio}
-                        pUpsideRatio={pUpsideRatio}
+                        pMaxUpsideA={pMaxUpsideA}
+                        pMaxUpsideB={pMaxUpsideB}
+                        pUpsideA={pUpsideA}
+                        pUpsideB={pUpsideB}
                         combinedDelta={combinedDelta} />
                 </div>
             )}
