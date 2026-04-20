@@ -65,6 +65,81 @@ def multi_scale_p(
     }
 
 
+P_SLOPE_WINDOW = 10
+
+
+def compute_p_slope(
+    prior_serve: dict,
+    stats_history: list[dict],
+    prefix: str,
+) -> float | None:
+    """Compute the slope of p over the last ~10 serve points.
+
+    Uses stats_history snapshots to compute p at each snapshot,
+    then linear regression of p vs serve_count over the window.
+    Returns slope (change in p per serve point), or None if insufficient data.
+    """
+    if not stats_history or len(stats_history) < 2:
+        return None
+
+    far_fi = prior_serve.get("first_in", 0.60)
+    far_fw = prior_serve.get("first_won", 0.70)
+    far_sw = prior_serve.get("second_won", 0.50)
+
+    # Compute p at each snapshot
+    points = []
+    for snap in stats_history:
+        s1t = snap.get(f"{prefix}_1st_serve_total", 0)
+        s1w = snap.get(f"{prefix}_1st_serve_won", 0)
+        s2t = snap.get(f"{prefix}_2nd_serve_total", 0)
+        s2w = snap.get(f"{prefix}_2nd_serve_won", 0)
+        total = s1t + s2t
+        if total == 0:
+            continue
+
+        m_fi = s1t / total
+        m_fw = s1w / s1t if s1t > 0 else far_fw
+        m_sw = s2w / s2t if s2t > 0 else far_sw
+
+        w_prior = PRIOR_POINTS / (PRIOR_POINTS + total)
+        w_match = total / (PRIOR_POINTS + total)
+
+        fi = w_prior * far_fi + w_match * m_fi
+        fw = w_prior * far_fw + w_match * m_fw
+        sw = w_prior * far_sw + w_match * m_sw
+
+        p = compute_p(fi, fw, sw)
+        points.append((total, p))
+
+    if len(points) < 2:
+        return None
+
+    # Take snapshots covering the last ~P_SLOPE_WINDOW serve points
+    last_total = points[-1][0]
+    cutoff = last_total - P_SLOPE_WINDOW
+    window_points = [(t, p) for t, p in points if t >= cutoff]
+    if len(window_points) < 2:
+        window_points = points[-3:]  # at least last 3 snapshots
+
+    if len(window_points) < 2:
+        return None
+
+    # Linear regression: p = slope * serve_count + intercept
+    x = [t for t, _ in window_points]
+    y = [p for _, p in window_points]
+    n = len(x)
+    sx = sum(x)
+    sy = sum(y)
+    sxx = sum(xi * xi for xi in x)
+    sxy = sum(xi * yi for xi, yi in zip(x, y))
+    denom = n * sxx - sx * sx
+    if abs(denom) < 1e-10:
+        return 0.0
+
+    slope = (n * sxy - sx * sy) / denom
+    return round(slope, 6)
+
+
 # Legacy compatibility
 def bayesian_update_p(prior_p, serve_wins, serve_total, prior_strength=20):
     if serve_total == 0:

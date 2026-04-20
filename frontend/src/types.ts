@@ -115,6 +115,8 @@ export interface MatchUpdateResult {
         histogram: HistogramBin[];
         stats: Stats;
     };
+    p_slope_a?: number | null;
+    p_slope_b?: number | null;
     max_prob_a?: {
         total_count: number;
         histogram: HistogramBin[];

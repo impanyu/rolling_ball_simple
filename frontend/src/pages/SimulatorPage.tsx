@@ -57,6 +57,8 @@ export default function SimulatorPage() {
     const [rescraping, setRescraping] = useState(false);
     const [statsHistory, setStatsHistory] = useState<Record<string, number>[]>(() => loadSession("statsHistory", []));
     const [simTab, setSimTab] = useState<"timeslice" | "maxprob">(() => loadSession("simTab", "timeslice"));
+    const [pSlopeA, setPSlopeA] = useState<number | null>(null);
+    const [pSlopeB, setPSlopeB] = useState<number | null>(null);
     const [maxResult, setMaxResult] = useState<{ current_win_prob: number; max_prob_a: { total_count: number; histogram: HistogramBin[]; stats: { mean: number; median: number; std: number } }; min_prob_a: { total_count: number; histogram: HistogramBin[]; stats: { mean: number; median: number; std: number } } } | null>(() => loadSession("maxResult", null));
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const updatingRef = useRef(false);
@@ -145,6 +147,8 @@ export default function SimulatorPage() {
             } : prev);
             setPA(update.p_a_updated);
             setPB(update.p_b_updated);
+            if (update.p_slope_a != null) setPSlopeA(update.p_slope_a);
+            if (update.p_slope_b != null) setPSlopeB(update.p_slope_b);
             setSimResult({
                 current_win_prob: update.current_win_prob,
                 slices: update.slices!,
@@ -252,7 +256,9 @@ export default function SimulatorPage() {
                         pMaxUpsideA={pMaxUpsideA}
                         pMaxUpsideB={pMaxUpsideB}
                         pUpsideA={pUpsideA}
-                        pUpsideB={pUpsideB} />
+                        pUpsideB={pUpsideB}
+                        pSlopeA={pSlopeA}
+                        pSlopeB={pSlopeB} />
                 </div>
             )}
 

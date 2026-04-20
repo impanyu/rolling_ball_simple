@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from app.tennis.engine import MatchState, build_win_prob_table
 from app.tennis.simulator import simulate_combined, win_prob_at_state
-from app.tennis.bayesian import update_serve_components, multi_scale_p
+from app.tennis.bayesian import update_serve_components, multi_scale_p, compute_p_slope
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -305,6 +305,11 @@ async def _do_match_update(req: dict):
     if stats:
         total_points = stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0)
 
+    # Compute p slopes from stats history
+    all_history = list(stats_history) + ([stats] if stats else [])
+    slope_a = compute_p_slope(serve_a_prior, all_history, "a")
+    slope_b = compute_p_slope(serve_b_prior, all_history, "b")
+
     return {
         "changed": True,
         "current_score": score,
@@ -314,6 +319,8 @@ async def _do_match_update(req: dict):
         "serve_a_updated": serve_a_updated,
         "serve_b_updated": serve_b_updated,
         "match_stats": stats,
+        "p_slope_a": slope_a,
+        "p_slope_b": slope_b,
         **sim_result,
     }
 

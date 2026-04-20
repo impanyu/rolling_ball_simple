@@ -13,6 +13,8 @@ interface Props {
     pMaxUpsideB?: number | null;
     pUpsideA?: number | null;
     pUpsideB?: number | null;
+    pSlopeA?: number | null;
+    pSlopeB?: number | null;
 }
 
 const POINT_LABELS = ["0", "15", "30", "40", "AD"];
@@ -31,7 +33,7 @@ function formatScore(score: ScoreState, _playerA: string, _playerB: string): str
 
 export default function MatchStatus({
     lookup, pA, pB, onPChange, currentWinProb, viewPlayer, autoUpdating, onToggleAutoUpdate,
-    pMaxUpsideA, pMaxUpsideB, pUpsideA, pUpsideB,
+    pMaxUpsideA, pMaxUpsideB, pUpsideA, pUpsideB, pSlopeA, pSlopeB,
 }: Props) {
     const viewName = viewPlayer === "a" ? lookup.player_a.split(" ").pop() : lookup.player_b.split(" ").pop();
     const displayProb = currentWinProb !== null
@@ -59,13 +61,14 @@ export default function MatchStatus({
                         <th style={{ padding: "4px 12px" }}>p</th>
                         <th style={{ padding: "4px 12px" }}>P(max up)</th>
                         <th style={{ padding: "4px 12px" }}>P(up)</th>
+                        <th style={{ padding: "4px 12px" }}>p slope</th>
                     </tr>
                 </thead>
                 <tbody>
                     {[
-                        { name: lookup.player_a.split(" ").pop(), prior: lookup.serve_a_prior, updated: lookup.serve_a_updated, isA: true, maxUp: pMaxUpsideA, up: pUpsideA },
-                        { name: lookup.player_b.split(" ").pop(), prior: lookup.serve_b_prior, updated: lookup.serve_b_updated, isA: false, maxUp: pMaxUpsideB, up: pUpsideB },
-                    ].map(({ name, prior, updated, isA, maxUp, up }) => (
+                        { name: lookup.player_a.split(" ").pop(), prior: lookup.serve_a_prior, updated: lookup.serve_a_updated, isA: true, maxUp: pMaxUpsideA, up: pUpsideA, slope: pSlopeA },
+                        { name: lookup.player_b.split(" ").pop(), prior: lookup.serve_b_prior, updated: lookup.serve_b_updated, isA: false, maxUp: pMaxUpsideB, up: pUpsideB, slope: pSlopeB },
+                    ].map(({ name, prior, updated, isA, maxUp, up, slope }) => (
                         <tr key={name} style={{ borderBottom: "1px solid #eee" }}>
                             <td style={{ fontWeight: 600, padding: "4px 12px" }}>{name}</td>
                             <td style={{ padding: "4px 12px", textAlign: "center" }}>
@@ -95,6 +98,9 @@ export default function MatchStatus({
                             <td style={{ padding: "4px 12px", textAlign: "center", fontWeight: 600, color: up != null && up >= 50 ? "#27ae60" : "#e74c3c" }}>
                                 {up != null ? `${up.toFixed(1)}%` : "—"}
                             </td>
+                            <td style={{ padding: "4px 12px", textAlign: "center", fontWeight: 600, fontSize: 13, color: slope != null ? (slope >= 0 ? "#27ae60" : "#e74c3c") : "#888" }}>
+                                {slope != null ? `${slope >= 0 ? "+" : ""}${(slope * 1000).toFixed(1)}‰` : "—"}
+                            </td>
                         </tr>
                     ))}
                 </tbody>
@@ -122,6 +128,17 @@ export default function MatchStatus({
                                 </span>
                             )}
                         </>;
+                    })()}
+                    {(() => {
+                        const mySlope = viewPlayer === "a" ? pSlopeA : pSlopeB;
+                        const oppSlope = viewPlayer === "a" ? pSlopeB : pSlopeA;
+                        if (mySlope == null || oppSlope == null) return null;
+                        const slopeDelta = mySlope - oppSlope;
+                        return (
+                            <span style={{ marginLeft: 16, fontSize: 14, color: slopeDelta >= 0 ? "#27ae60" : "#e74c3c" }}>
+                                Δslope: <strong>{slopeDelta >= 0 ? "+" : ""}{(slopeDelta * 1000).toFixed(1)}‰</strong>
+                            </span>
+                        );
                     })()}
                 </div>
             )}
