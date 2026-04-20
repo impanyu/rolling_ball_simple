@@ -150,7 +150,7 @@ def compute_prior_from_matches(
     for component in ["first_in", "first_won", "second_won"]:
         values = [m[component] for m in filtered]
 
-        if len(filtered) >= 5:
+        if len(filtered) >= 3:
             predicted = _linear_regression_predict(
                 [float(r) for r in opp_ranks], values, target_rank
             )
