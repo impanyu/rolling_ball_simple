@@ -238,16 +238,19 @@ async def _do_match_update(req: dict):
     from app.scraper.flashscore import read_match_score, read_match_stats
 
     browser = await get_browser()
-    # Find the persistent match page tab
+    # Find the persistent match page tab by exact URL match
     pages = browser.contexts[0].pages if browser.contexts else []
     match_page = None
+    # Extract the core match path (without query params) for matching
+    match_path = match_url.split("?")[0].rstrip("/") if match_url else ""
     for pg in pages:
-        if match_url and match_url in pg.url:
+        pg_path = pg.url.split("?")[0].rstrip("/")
+        if match_path and match_path == pg_path:
             match_page = pg
             break
 
     if not match_page:
-        # No persistent tab for this match — open one
+        logger.info(f"No existing tab for {match_path}, opening new one. Open pages: {[p.url[:60] for p in pages]}")
         match_page = await browser.new_page()
         await match_page.goto(match_url, timeout=10000)
         await match_page.wait_for_timeout(4000)
