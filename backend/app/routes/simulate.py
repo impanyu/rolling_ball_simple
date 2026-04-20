@@ -242,12 +242,12 @@ async def _do_match_update(req: dict):
     pages = browser.contexts[0].pages if browser.contexts else []
     match_page = None
     for pg in pages:
-        if "/match/tennis/" in pg.url:
+        if match_url and match_url in pg.url:
             match_page = pg
             break
 
     if not match_page:
-        # No persistent tab — open one (first time after lookup closed it)
+        # No persistent tab for this match — open one
         match_page = await browser.new_page()
         await match_page.goto(match_url, timeout=10000)
         await match_page.wait_for_timeout(4000)
