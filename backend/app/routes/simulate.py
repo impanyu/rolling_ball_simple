@@ -297,18 +297,21 @@ async def _do_match_update(req: dict):
         f"p_b={p_b:.4f} (far={serve_b_updated.get('p_far')}, window={serve_b_updated.get('window_size')})"
     )
 
-    state = score_to_match_state(ScoreInput(**score), first_server)
-    table = build_win_prob_table(p_a, p_b)
-    sim_result = simulate_combined(state, p_a, p_b, table, num_simulations)
-
-    total_points = 0
-    if stats:
-        total_points = stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0)
-
     # Compute p slopes from stats history
     all_history = list(stats_history) + ([stats] if stats else [])
     slope_a = compute_p_slope(serve_a_prior, all_history, "a")
     slope_b = compute_p_slope(serve_b_prior, all_history, "b")
+
+    state = score_to_match_state(ScoreInput(**score), first_server)
+    table = build_win_prob_table(p_a, p_b)
+    sim_result = simulate_combined(
+        state, p_a, p_b, table, num_simulations,
+        slope_a=slope_a or 0.0, slope_b=slope_b or 0.0,
+    )
+
+    total_points = 0
+    if stats:
+        total_points = stats.get("a_serve_total", 0) + stats.get("b_serve_total", 0)
 
     return {
         "changed": True,

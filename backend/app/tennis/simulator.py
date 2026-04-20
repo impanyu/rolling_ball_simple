@@ -191,12 +191,14 @@ def simulate_combined(
     n_simulations: int = 100_000,
     max_points: int = MAX_PATH_POINTS,
     horizons: List[int] | None = None,
+    slope_a: float = 0.0,
+    slope_b: float = 0.0,
 ) -> dict:
-    """Unified simulation: collects time-slice snapshots AND max prob in one pass.
+    """Unified simulation with p trend (slope) per serve point.
 
-    Each path simulates up to max_points (default 100). Along the way:
-    - Records P(A wins) at each horizon point (10, 20, 30, 50, 80)
-    - Tracks the maximum P(A wins) encountered on the path
+    Each path simulates up to max_points. p values drift by slope per point:
+    p_a(t) = clamp(p_a + slope_a * t, 0.2, 0.9)
+    p_b(t) = clamp(p_b + slope_b * t, 0.2, 0.9)
     """
     if horizons is None:
         horizons = HORIZON_POINTS
@@ -231,7 +233,9 @@ def simulate_combined(
                         recorded_horizons.add(h)
                 break
 
-            p_a_point = p_a if state.is_a_serving else (1.0 - p_b)
+            pa_t = max(0.2, min(0.9, p_a + slope_a * point_idx))
+            pb_t = max(0.2, min(0.9, p_b + slope_b * point_idx))
+            p_a_point = pa_t if state.is_a_serving else (1.0 - pb_t)
             a_wins_point = rng.random() < p_a_point
             state = next_state(state, a_wins_point)
 
