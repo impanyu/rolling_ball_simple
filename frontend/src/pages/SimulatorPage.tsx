@@ -429,7 +429,7 @@ export default function SimulatorPage() {
                             color: simTab === "maxprob" ? "#e74c3c" : "#888",
                         }}
                     >
-                        Max Prob (100 pts)
+                        Max Prob (30 pts)
                     </button>
                 </div>
             )}
