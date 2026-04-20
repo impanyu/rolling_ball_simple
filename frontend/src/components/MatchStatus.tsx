@@ -140,6 +140,17 @@ export default function MatchStatus({
                             </span>
                         );
                     })()}
+                    {(() => {
+                        const myP = viewPlayer === "a" ? pA : pB;
+                        const oppP = viewPlayer === "a" ? pB : pA;
+                        if (!oppP || oppP === 0) return null;
+                        const ratio = myP / oppP;
+                        return (
+                            <span style={{ marginLeft: 16, fontSize: 14, color: ratio >= 1 ? "#27ae60" : "#e74c3c" }}>
+                                p ratio: <strong>{ratio.toFixed(3)}</strong>
+                            </span>
+                        );
+                    })()}
                 </div>
             )}
             {lookup.match_found && (
