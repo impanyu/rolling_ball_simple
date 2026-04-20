@@ -218,6 +218,8 @@ def simulate_combined(
         path_max = init_prob
         path_min = init_prob
         recorded_horizons: set[int] = set()
+        a_serve_count = 0
+        b_serve_count = 0
 
         for point_idx in range(1, max_points + 1):
             if state.is_terminal():
@@ -233,8 +235,12 @@ def simulate_combined(
                         recorded_horizons.add(h)
                 break
 
-            pa_t = max(0.2, min(0.9, p_a + slope_a * point_idx))
-            pb_t = max(0.2, min(0.9, p_b + slope_b * point_idx))
+            if state.is_a_serving:
+                a_serve_count += 1
+            else:
+                b_serve_count += 1
+            pa_t = max(0.2, min(0.9, p_a + slope_a * a_serve_count))
+            pb_t = max(0.2, min(0.9, p_b + slope_b * b_serve_count))
             p_a_point = pa_t if state.is_a_serving else (1.0 - pb_t)
             a_wins_point = rng.random() < p_a_point
             state = next_state(state, a_wins_point)
