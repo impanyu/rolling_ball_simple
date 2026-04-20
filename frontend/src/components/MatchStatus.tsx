@@ -13,7 +13,6 @@ interface Props {
     pMaxUpsideB?: number | null;
     pUpsideA?: number | null;
     pUpsideB?: number | null;
-    combinedDelta?: number | null;
 }
 
 const POINT_LABELS = ["0", "15", "30", "40", "AD"];
@@ -32,7 +31,7 @@ function formatScore(score: ScoreState, _playerA: string, _playerB: string): str
 
 export default function MatchStatus({
     lookup, pA, pB, onPChange, currentWinProb, viewPlayer, autoUpdating, onToggleAutoUpdate,
-    pMaxUpsideA, pMaxUpsideB, pUpsideA, pUpsideB, combinedDelta,
+    pMaxUpsideA, pMaxUpsideB, pUpsideA, pUpsideB,
 }: Props) {
     const viewName = viewPlayer === "a" ? lookup.player_a.split(" ").pop() : lookup.player_b.split(" ").pop();
     const displayProb = currentWinProb !== null
@@ -124,11 +123,6 @@ export default function MatchStatus({
                             )}
                         </>;
                     })()}
-                    {combinedDelta != null && (
-                        <span style={{ marginLeft: 16, fontSize: 14, color: combinedDelta >= 0 ? "#27ae60" : "#e74c3c" }}>
-                            &Delta;E: <strong>{combinedDelta >= 0 ? "+" : ""}{combinedDelta.toFixed(1)}%</strong>
-                        </span>
-                    )}
                 </div>
             )}
             {lookup.match_found && (

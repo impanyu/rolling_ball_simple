@@ -223,14 +223,6 @@ export default function SimulatorPage() {
         return hist.filter(b => b.bin_start >= thresholdB).reduce((s, b) => s + b.percentage, 0);
     })();
 
-    // Delta E from combined histogram
-    const combinedDelta = (() => {
-        if (!simResult || currentProb == null) return null;
-        const combined = isFlipped
-            ? flipStats(simResult.combined.stats)
-            : simResult.combined.stats;
-        return combined.mean - currentProb;
-    })();
 
     const viewHistory = probHistory.map(pt => ({
         points: pt.points,
@@ -260,8 +252,7 @@ export default function SimulatorPage() {
                         pMaxUpsideA={pMaxUpsideA}
                         pMaxUpsideB={pMaxUpsideB}
                         pUpsideA={pUpsideA}
-                        pUpsideB={pUpsideB}
-                        combinedDelta={combinedDelta} />
+                        pUpsideB={pUpsideB} />
                 </div>
             )}
 
