@@ -118,33 +118,37 @@ def compute_prior_from_matches(
     if match_date is None:
         match_date = datetime.date.today()
 
-    cutoff = match_date - datetime.timedelta(days=MONTHS_BACK * 30)
+    # Try progressively wider windows until we have enough matches
+    for months in [MONTHS_BACK, 6, 12]:
+        cutoff = match_date - datetime.timedelta(days=months * 30)
+        date_filtered = [m for m in matches if cutoff <= m["date"] < match_date]
 
-    # Filter by date range
-    filtered = [m for m in matches if cutoff <= m["date"] < match_date]
-
-    # Filter by surface if available
-    if surface:
-        surface_matches = [m for m in filtered if m["surface"] == surface.lower()]
-        if len(surface_matches) >= 3:
-            filtered = surface_matches
-        else:
-            logger.warning(f"Only {len(surface_matches)} matches on {surface} in last {MONTHS_BACK} months, using all surfaces")
-
-    if len(filtered) < 3:
-        # Not enough recent matches, extend to previous season
-        prev_cutoff = match_date - datetime.timedelta(days=6 * 30)
-        filtered = [m for m in matches if prev_cutoff <= m["date"] < match_date]
         if surface:
-            surface_matches = [m for m in filtered if m["surface"] == surface.lower()]
-            if len(surface_matches) >= 3:
-                filtered = surface_matches
+            surface_filtered = [m for m in date_filtered if m["surface"] == surface.lower()]
+            if len(surface_filtered) >= 3:
+                filtered = surface_filtered
+                logger.info(f"Using {len(filtered)} {surface} matches from last {months} months")
+                break
 
-    if not filtered:
-        return None
+        if len(date_filtered) >= 3:
+            filtered = date_filtered
+            if surface:
+                logger.warning(f"Not enough {surface} matches, using all {len(filtered)} matches from last {months} months")
+            else:
+                logger.info(f"Using {len(filtered)} matches from last {months} months")
+            break
+    else:
+        filtered = [m for m in matches if m["date"] < match_date]
+        if not filtered:
+            return None
+        logger.warning(f"Using all {len(filtered)} career matches as fallback")
 
     opp_ranks = [m["opp_rank"] for m in filtered]
-    target_rank = float(opponent_rank) if opponent_rank else float(np.median(opp_ranks))
+    if opponent_rank and opponent_rank > 0:
+        target_rank = float(opponent_rank)
+    else:
+        target_rank = float(np.median(opp_ranks))
+        logger.warning(f"No opponent rank provided, using median of data: {target_rank:.0f}")
 
     result = {}
     for component in ["first_in", "first_won", "second_won"]:
