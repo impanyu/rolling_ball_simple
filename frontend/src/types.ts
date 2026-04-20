@@ -47,6 +47,9 @@ export interface ServeComponents {
     p_far?: number;
     window_size?: number;
     is_default?: boolean;
+    matches_used?: number;
+    date_from?: string;
+    date_to?: string;
 }
 
 export interface LookupResult {

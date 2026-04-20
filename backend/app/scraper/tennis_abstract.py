@@ -169,7 +169,10 @@ def compute_prior_from_matches(
     fi, fw, sw = result["first_in"], result["first_won"], result["second_won"]
     result["p_serve"] = round(fi * fw + (1 - fi) * sw, 4)
     result["matches_used"] = len(filtered)
-    result["method"] = "regression" if len(filtered) >= 5 else "mean"
+    result["method"] = "regression" if len(filtered) >= 3 else "mean"
+    dates = sorted([m["date"] for m in filtered])
+    result["date_from"] = dates[0].isoformat() if dates else None
+    result["date_to"] = dates[-1].isoformat() if dates else None
 
     logger.info(
         f"Prior from {len(filtered)} matches (target_rank={target_rank:.0f}): "

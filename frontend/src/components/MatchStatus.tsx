@@ -105,6 +105,11 @@ export default function MatchStatus({
                     ))}
                 </tbody>
             </table>
+            <div style={{ marginTop: 4, fontSize: 12, color: "#888" }}>
+                Prior: {lookup.serve_a_prior?.matches_used ?? "?"} matches ({lookup.serve_a_prior?.date_from ?? "?"} to {lookup.serve_a_prior?.date_to ?? "?"}) for {lookup.player_a.split(" ").pop()}
+                {" | "}
+                {lookup.serve_b_prior?.matches_used ?? "?"} matches ({lookup.serve_b_prior?.date_from ?? "?"} to {lookup.serve_b_prior?.date_to ?? "?"}) for {lookup.player_b.split(" ").pop()}
+            </div>
             {displayProb !== null && (
                 <div style={{ fontSize: 18, marginTop: 12 }}>
                     Current P({viewName} wins):{" "}
