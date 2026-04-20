@@ -454,7 +454,7 @@ export default function SimulatorPage() {
                             data={displayData}
                             xLabel="Max P(win) %"
                             unit="%"
-                            title={`Max Win Probability in next 100 pts — ${viewName}`}
+                            title={`Max Win Probability in next 30 pts — ${viewName}`}
                             currentProb={currentProb ?? undefined}
                         />
                         <div style={{ marginTop: 8, padding: 12, border: "1px solid #ddd", borderRadius: 8, fontSize: 14 }}>
