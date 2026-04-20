@@ -149,8 +149,8 @@ def _simulate_one_path(
     return max_prob
 
 
-MAX_PATH_POINTS = 100
-HORIZON_POINTS = [10, 20, 30, 50, 80, 100]
+MAX_PATH_POINTS = 30
+HORIZON_POINTS = [10, 20, 30]
 HORIZON_WEIGHTS = {n: 1.0 / n for n in HORIZON_POINTS}
 
 
