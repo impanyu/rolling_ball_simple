@@ -204,8 +204,8 @@ export default function SimulatorPage() {
     // Compute P(max upside) and P(upside) for BOTH players, then ratio
     const probA = simResult ? simResult.current_win_prob : null;
     const probB = probA != null ? 100 - probA : null;
-    const thresholdA = probA != null ? Math.min(Math.floor((probA + 20) / 5) * 5, 95) : null;
-    const thresholdB = probB != null ? Math.min(Math.floor((probB + 20) / 5) * 5, 95) : null;
+    const thresholdA = probA != null ? Math.min(Math.floor((probA + 15) / 5) * 5, 95) : null;
+    const thresholdB = probB != null ? Math.min(Math.floor((probB + 15) / 5) * 5, 95) : null;
 
     const pMaxUpsideA = (() => {
         if (!maxResult || thresholdA == null) return null;
@@ -444,7 +444,7 @@ export default function SimulatorPage() {
                     const displayData = isFlipped
                         ? { total_count: src.total_count, histogram: flipHistogram(src.histogram), stats: flipStats(src.stats) }
                         : { total_count: src.total_count, histogram: src.histogram, stats: src.stats };
-                    const threshold = Math.min(Math.floor(((currentProb ?? 50) + 20) / 5) * 5, 95);
+                    const threshold = Math.min(Math.floor(((currentProb ?? 50) + 15) / 5) * 5, 95);
                     const aboveSum = displayData.histogram
                         .filter(b => b.bin_start >= threshold)
                         .reduce((s, b) => s + b.percentage, 0);
