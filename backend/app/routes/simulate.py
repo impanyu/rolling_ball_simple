@@ -238,22 +238,30 @@ async def _do_match_update(req: dict):
     from app.scraper.flashscore import read_match_score, read_match_stats
 
     browser = await get_browser()
-    # Find the persistent match page tab by exact URL match
+    # Find the persistent match page tab
     pages = browser.contexts[0].pages if browser.contexts else []
     match_page = None
-    # Extract the core match path (without query params) for matching
-    match_path = match_url.split("?")[0].rstrip("/") if match_url else ""
+    # Extract player slugs from match_url for flexible matching
+    import re as _re
+    slug_match = _re.findall(r'/match/tennis/([\w-]+)', match_url)
+    match_slugs = [s.split("-")[0] for s in slug_match]  # first part of each slug
+
     for pg in pages:
-        pg_path = pg.url.split("?")[0].rstrip("/")
-        if match_path and match_path == pg_path:
+        pg_url = pg.url
+        if match_url.split("?")[0].rstrip("/") == pg_url.split("?")[0].rstrip("/"):
+            match_page = pg
+            break
+        # Fallback: check if player slugs are in the page URL
+        if match_slugs and all(s in pg_url for s in match_slugs):
             match_page = pg
             break
 
     if not match_page:
-        logger.info(f"No existing tab for {match_path}, opening new one. Open pages: {[p.url[:60] for p in pages]}")
+        logger.info(f"No existing tab for {match_url[:60]}, opening new one. Open pages: {[p.url[:60] for p in pages]}")
         match_page = await browser.new_page()
         await match_page.goto(match_url, timeout=10000)
         await match_page.wait_for_timeout(4000)
+        logger.info(f"Opened page, actual URL: {match_page.url[:80]}")
 
     # Read directly from DOM (WebSocket keeps it updated)
     try:
