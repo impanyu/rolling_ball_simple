@@ -27,6 +27,8 @@ function flipStats(stats: { mean: number; median: number; std: number }): { mean
 interface ProbPoint {
     points: number;
     prob: number;
+    pA?: number;
+    pB?: number;
 }
 
 // Session storage helpers
@@ -98,7 +100,7 @@ export default function SimulatorPage() {
             const sim = await runSimulation(result.p_a_updated, result.p_b_updated, result.current_score, firstServer, 10000);
             setSimResult(sim);
             setMaxResult({ current_win_prob: sim.current_win_prob, max_prob_a: sim.max_prob_a, min_prob_a: sim.min_prob_a });
-            setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob }]);
+            setProbHistory([{ points: result.total_points || 0, prob: sim.current_win_prob, pA: result.p_a_updated * 100, pB: result.p_b_updated * 100 }]);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Lookup failed");
         } finally {
@@ -170,12 +172,13 @@ export default function SimulatorPage() {
                     return prev;
                 }
                 // Same point count as last entry — update in place
+                const newPt = { points: tp, prob: update.current_win_prob, pA: update.p_a_updated * 100, pB: update.p_b_updated * 100 };
                 if (prev.length > 0 && prev[prev.length - 1].points === tp) {
                     const updated = [...prev];
-                    updated[updated.length - 1] = { points: tp, prob: update.current_win_prob };
+                    updated[updated.length - 1] = newPt;
                     return updated;
                 }
-                return [...prev, { points: tp, prob: update.current_win_prob }];
+                return [...prev, newPt];
             });
         } catch { /* silent fail on auto-update */ }
         finally { updatingRef.current = false; }
@@ -231,6 +234,8 @@ export default function SimulatorPage() {
     const viewHistory = probHistory.map(pt => ({
         points: pt.points,
         prob: isFlipped ? 100 - pt.prob : pt.prob,
+        pA: pt.pA,
+        pB: pt.pB,
     }));
 
     function toViewData(histogram: HistogramBin[], stats: { mean: number; median: number; std: number }, count: number): QueryResponse {
@@ -402,7 +407,12 @@ export default function SimulatorPage() {
             {/* Live win probability chart */}
             {probHistory.length > 0 && (
                 <div style={{ marginTop: 16 }}>
-                    <WinProbChart data={viewHistory} playerName={viewName} />
+                    <WinProbChart
+                        data={viewHistory}
+                        playerName={viewName}
+                        playerAName={lookup?.player_a.split(" ").pop()}
+                        playerBName={lookup?.player_b.split(" ").pop()}
+                    />
                 </div>
             )}
 
