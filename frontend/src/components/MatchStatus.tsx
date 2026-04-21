@@ -116,20 +116,16 @@ export default function MatchStatus({
                     <strong>{displayProb.toFixed(1)}%</strong>
                     {(() => {
                         const myMax = viewPlayer === "a" ? pMaxUpsideA : pMaxUpsideB;
-                        const oppMax = viewPlayer === "a" ? pMaxUpsideB : pMaxUpsideA;
                         const myUp = viewPlayer === "a" ? pUpsideA : pUpsideB;
-                        const oppUp = viewPlayer === "a" ? pUpsideB : pUpsideA;
-                        const maxRatio = myMax != null && oppMax != null ? (oppMax > 0 ? myMax / oppMax : myMax > 0 ? Infinity : 0) : null;
-                        const upRatio = myUp != null && oppUp != null ? (oppUp > 0 ? myUp / oppUp : myUp > 0 ? Infinity : 0) : null;
                         return <>
-                            {maxRatio != null && (
-                                <span style={{ marginLeft: 16, fontSize: 14, color: maxRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
-                                    P(max up) ratio: <strong>{maxRatio === Infinity ? "∞" : maxRatio.toFixed(2)}</strong>
+                            {myMax != null && (
+                                <span style={{ marginLeft: 16, fontSize: 14, color: myMax >= 50 ? "#27ae60" : "#e74c3c" }}>
+                                    P(max up): <strong>{myMax.toFixed(1)}%</strong>
                                 </span>
                             )}
-                            {upRatio != null && (
-                                <span style={{ marginLeft: 16, fontSize: 14, color: upRatio >= 1 ? "#27ae60" : "#e74c3c" }}>
-                                    P(up) ratio: <strong>{upRatio === Infinity ? "∞" : upRatio.toFixed(2)}</strong>
+                            {myUp != null && (
+                                <span style={{ marginLeft: 16, fontSize: 14, color: myUp >= 50 ? "#27ae60" : "#e74c3c" }}>
+                                    P(up): <strong>{myUp.toFixed(1)}%</strong>
                                 </span>
                             )}
                         </>;
