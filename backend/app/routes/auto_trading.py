@@ -329,13 +329,15 @@ async def _compute_signal(db_path, player_a, player_b, rank_a, rank_b, cp, ip, r
     if diff > 0:
         buy_player = player_a
         buy_price = cp
-        buy_side = "yes" if not swapped else "no"
-        buy_ticker_idx = 0 if not swapped else 1
+        # player_a after swap = original player_b → ticker_b; no swap → ticker_a
+        buy_side = "yes"
+        buy_ticker_idx = 1 if swapped else 0
     else:
         buy_player = player_b
         buy_price = 100 - cp
-        buy_side = "no" if not swapped else "yes"
-        buy_ticker_idx = 1 if not swapped else 0
+        # player_b after swap = original player_a → ticker_a; no swap → ticker_b
+        buy_side = "yes"
+        buy_ticker_idx = 0 if swapped else 1
 
     ev = max(0, abs_diff / 500) * (100 - buy_price - 2) - max(0, 1 - abs_diff / 500) * (buy_price + 2)
     penalty = max(0, 1 - ((buy_price - 50) / 25) ** 2)
@@ -555,12 +557,11 @@ async def _poll_and_trade(client, db_path):
                     count = signal["contracts"] * 10
                     result = await client.place_order(
                         ticker=ticker,
-                        side=signal["buy_side"],
+                        side="yes",
                         action="buy",
                         count=count,
                         type="limit",
-                        yes_price=price_cents if signal["buy_side"] == "yes" else None,
-                        no_price=price_cents if signal["buy_side"] == "no" else None,
+                        yes_price=price_cents,
                     )
                     order_id = result.get("order", {}).get("order_id", "")
                     logger.info(f"AUTO TRADE: {signal['rec']} @ {price_cents}c, order={order_id}")
