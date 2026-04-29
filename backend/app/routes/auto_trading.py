@@ -659,17 +659,27 @@ async def _poll_and_trade(client, db_path):
                     pass
 
             if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start") and not skip_trade:
-                # Place order: each "unit" = 10 contracts
+                # Place order: each "unit" = 10 contracts, use yes_ask for immediate fill
                 ticker = m["ticker_a"] if signal["buy_ticker_idx"] == 0 else m["ticker_b"]
                 try:
-                    price_cents = signal["buy_price"]
+                    # Get ask price for immediate execution
+                    ask_price = round(float(market.get("yes_ask_dollars", 0)) * 100)
+                    if signal["buy_ticker_idx"] != 0:
+                        # Need ask from the other ticker
+                        try:
+                            other_mk = await client.get_market(m["ticker_b"] if signal["buy_ticker_idx"] == 1 else m["ticker_a"])
+                            ask_price = round(float(other_mk.get("market", other_mk).get("yes_ask_dollars", 0)) * 100)
+                        except Exception:
+                            pass
+                    price_cents = ask_price if ask_price > 0 else signal["buy_price"]
                     count = signal["contracts"] * 10
                     result = await client.place_order(
                         ticker=ticker,
                         side="yes",
                         action="buy",
                         count=count,
-                        type="market",
+                        type="limit",
+                        yes_price=price_cents,
                     )
                     order_id = result.get("order", {}).get("order_id", "")
                     logger.info(f"AUTO TRADE: {signal['rec']} @ {price_cents}c, order={order_id}")
