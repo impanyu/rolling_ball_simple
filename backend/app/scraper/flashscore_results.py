@@ -166,7 +166,7 @@ async def scrape_live_match_start(player_a: str, player_b: str, db_path: str = N
         match_url = None
 
         if player_href:
-            # Visit player page to find the specific match
+            # Visit player page to find the specific match (prefer upcoming over historical)
             url = f"https://www.flashscoreusa.com{player_href}"
             await page.goto(url, timeout=15000)
             await page.wait_for_timeout(3000)
@@ -174,14 +174,19 @@ async def scrape_live_match_start(player_a: str, player_b: str, db_path: str = N
             match_url = await page.evaluate("""(args) => {
                 const [lastA, lastB] = args;
                 const rows = document.querySelectorAll('[class*="event__match"]');
+                let bestHref = null;
                 for (const row of rows) {
                     const text = row.textContent.toLowerCase();
                     if (text.includes(lastA) && text.includes(lastB)) {
                         const a = row.querySelector('a[href]');
-                        if (a) return a.getAttribute('href');
+                        if (!a) continue;
+                        if (text.includes('preview') || text.includes('not started') || text.includes('set ')) {
+                            return a.getAttribute('href');
+                        }
+                        if (!bestHref) bestHref = a.getAttribute('href');
                     }
                 }
-                return null;
+                return bestHref;
             }""", [last_a, last_b])
 
         if not match_url:
@@ -224,8 +229,18 @@ async def scrape_live_match_start(player_a: str, player_b: str, db_path: str = N
 
         # Parse "05:30 PM, April 27, 2026" or "17:30, 27 April 2026" etc.
         import time as _time
+        from datetime import timezone as tz
         month_map = {"january":1,"february":2,"march":3,"april":4,"may":5,"june":6,
                      "july":7,"august":8,"september":9,"october":10,"november":11,"december":12}
+
+        def _validate_and_return(utc_dt):
+            """Only return if start time is recent (within 24h past) or future."""
+            now_utc = datetime.now(tz.utc).replace(tzinfo=None)
+            if utc_dt < now_utc - timedelta(hours=24):
+                logger.debug(f"FlashScore: rejecting old start time {utc_dt}")
+                return None
+            logger.info(f"FlashScore: {player_a} vs {player_b} start={utc_dt.isoformat()}Z (from '{start_text}')")
+            return utc_dt.isoformat() + "Z"
 
         # US format: "05:30 PM, April 27, 2026"
         m = re.match(r'(\d{1,2}):(\d{2})\s*(AM|PM),?\s*(\w+)\s+(\d{1,2}),?\s*(\d{4})', start_text)
@@ -242,7 +257,7 @@ async def scrape_live_match_start(player_a: str, player_b: str, db_path: str = N
             utc_offset = _time.timezone if _time.daylight == 0 else _time.altzone
             local_dt = datetime(year, mon, day, hour, minute)
             utc_dt = local_dt + timedelta(seconds=utc_offset)
-            logger.info(f"FlashScore: {player_a} vs {player_b} start={utc_dt.isoformat()}Z (from '{start_text}')")
+            return _validate_and_return(utc_dt)
             return utc_dt.isoformat() + "Z"
 
         # European format: "17:30, 27 April 2026"
@@ -257,7 +272,7 @@ async def scrape_live_match_start(player_a: str, player_b: str, db_path: str = N
             utc_offset = _time.timezone if _time.daylight == 0 else _time.altzone
             local_dt = datetime(year, mon, day, hour, minute)
             utc_dt = local_dt + timedelta(seconds=utc_offset)
-            logger.info(f"FlashScore: {player_a} vs {player_b} start={utc_dt.isoformat()}Z (from '{start_text}')")
+            return _validate_and_return(utc_dt)
             return utc_dt.isoformat() + "Z"
 
         logger.warning(f"FlashScore: could not parse startTime '{start_text}'")
