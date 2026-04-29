@@ -596,11 +596,6 @@ async def _poll_and_trade(client, db_path):
             prev_price = history[-1]["cp"] if history else cp
             recent_change = cp - prev_price
 
-            # Add to history
-            history.append({"t": now_str[:19], "cp": cp, "min": minutes_played})
-            if len(history) > 500:
-                history = history[-500:]
-
             # Resolve player names and get fresh rankings
             pa = await _resolve_player(db_path, m["player_a"])
             pb = await _resolve_player(db_path, m["player_b"])
@@ -612,6 +607,15 @@ async def _poll_and_trade(client, db_path):
                 db_path, pa, pb, rank_a, rank_b,
                 cp, ip, rmin, rmax, minutes_played, recent_change,
             )
+
+            # Add to history (include signal for persistence check)
+            history.append({
+                "t": now_str[:19], "cp": cp, "min": minutes_played,
+                "contracts": signal["contracts"],
+                "side": "A" if signal["diff"] > 0 else "B",
+            })
+            if len(history) > 500:
+                history = history[-500:]
 
             # Confirm match is actually in progress: scheduled time passed + market active + price exists
             market_active = status in ("active", "trading")
@@ -658,7 +662,17 @@ async def _poll_and_trade(client, db_path):
                 except Exception:
                     pass
 
-            if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start") and not skip_trade:
+            # Persistence check: signal must be consistent for last 15 minutes
+            PERSISTENCE_MINUTES = 15
+            signal_persistent = False
+            if signal["contracts"] > 0:
+                current_side = "A" if signal["diff"] > 0 else "B"
+                cutoff_min = minutes_played - PERSISTENCE_MINUTES
+                recent = [h for h in history if h.get("min", 0) >= cutoff_min and h.get("min", 0) < minutes_played and "contracts" in h]
+                if len(recent) >= 2 and all(h["contracts"] > 0 and h["side"] == current_side for h in recent):
+                    signal_persistent = True
+
+            if signal_persistent and minutes_played > 0 and m.get("match_start") and not skip_trade:
                 # Place order: each "unit" = 10 contracts, use yes_ask for immediate fill
                 ticker = m["ticker_a"] if signal["buy_ticker_idx"] == 0 else m["ticker_b"]
                 try:
