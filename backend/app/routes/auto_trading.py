@@ -316,8 +316,16 @@ async def _poll_and_trade(client, db_path):
 
     for m in matches:
         try:
-            # Skip matches without confirmed start time (can't trade anyway)
-            if m["status"] == "upcoming" and not m.get("match_start"):
+            # Skip matches without FlashScore-confirmed start time
+            if not m.get("match_start"):
+                continue
+
+            # Skip if match hasn't reached scheduled start time yet
+            try:
+                start_dt = datetime.fromisoformat(m["match_start"].replace("Z", "+00:00"))
+                if now < start_dt:
+                    continue
+            except Exception:
                 continue
 
             # Skip matches in cooldown (no point polling)
@@ -433,7 +441,9 @@ async def _poll_and_trade(client, db_path):
                 cp, ip, rmin, rmax, minutes_played, recent_change,
             )
 
-            new_status = "in_progress" if minutes_played > 0 else "upcoming"
+            # Confirm match is actually in progress: scheduled time passed + market active + price exists
+            market_active = status in ("active", "trading")
+            new_status = "in_progress" if (minutes_played > 0 and market_active and cp > 0) else "upcoming"
 
             async with get_db(db_path) as db:
                 await db.execute(
