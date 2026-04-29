@@ -1245,6 +1245,7 @@ function AutoTradingPage() {
 
     if (selectedMatch) {
         const sig = detailSignal;
+        const md = selectedMatchData;
         const mTrades = matchDetail?.trades || [];
         const settled = mTrades.filter((t: any) => t.status === "settled");
         const totalPnl = settled.reduce((s: number, t: any) => s + (t.pnl || 0), 0);
@@ -1252,19 +1253,23 @@ function AutoTradingPage() {
 
         return (
             <div style={{ padding: 20 }}>
-                <button onClick={() => { setSelectedMatch(null); setMatchDetail(null); setDetailSignal(null); setDetailHistory([]); }}
+                <button onClick={() => { setSelectedMatch(null); setSelectedMatchData(null); setMatchDetail(null); setDetailSignal(null); setDetailHistory([]); }}
                     style={{ marginBottom: 12, cursor: "pointer" }}>Back to List</button>
                 <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 20 }}>
-                    {/* Header */}
+                    {/* Header — show from match data immediately, update when signal arrives */}
                     <div>
                         <h3 style={{ margin: 0 }}>
-                            {sig?.player_a || "..."} {sig?.rank_a ? `(#${sig.rank_a})` : ""}
+                            {sig?.player_a || md?.player_a || "..."} {(sig?.rank_a || md?.rank_a) ? `(#${sig?.rank_a || md?.rank_a})` : ""}
                             {" vs "}
-                            {sig?.player_b || "..."} {sig?.rank_b ? `(#${sig.rank_b})` : ""}
+                            {sig?.player_b || md?.player_b || "..."} {(sig?.rank_b || md?.rank_b) ? `(#${sig?.rank_b || md?.rank_b})` : ""}
                         </h3>
                         <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
-                            Match start: <strong>{sig?.match_start ? new Date(sig.match_start).toLocaleString() : "detecting..."}</strong>
-                            {sig?.minutes_played != null && <> | Minutes played: <strong>{sig.minutes_played}</strong></>}
+                            {sig ? (
+                                <>Match start: <strong>{sig.match_start ? new Date(sig.match_start).toLocaleString() : "detecting..."}</strong>
+                                {sig.minutes_played != null && <> | Minutes played: <strong>{sig.minutes_played}</strong></>}</>
+                            ) : (
+                                <span>Loading signal... (first load may take 10-20s for FlashScore)</span>
+                            )}
                         </div>
                     </div>
 
