@@ -356,13 +356,14 @@ async def _poll_and_trade(client, db_path):
                     (m["event_ticker"],),
                 )
                 lt_row = await last_trade_q.fetchone()
-            if lt_row:
+            if lt_row and lt_row[0]:
                 try:
-                    last_t = datetime.fromisoformat(lt_row[0].replace("Z", "+00:00"))
+                    ts = lt_row[0].replace("+00:00Z", "Z").replace("Z", "+00:00")
+                    last_t = datetime.fromisoformat(ts)
                     if (now - last_t).total_seconds() < COOLDOWN_MINUTES * 60:
                         continue
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Cooldown parse error for {m['event_ticker']}: {lt_row[0]} -> {e}")
 
             market_data = await client.get_market(m["ticker_a"])
             market = market_data.get("market", market_data)
