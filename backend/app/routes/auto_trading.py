@@ -408,6 +408,33 @@ async def _poll_and_trade(client, db_path):
         )
         matches = [dict(r) for r in await cursor.fetchall()]
 
+    # Check pending orders — update status if filled
+    async with get_db(db_path) as db:
+        pending_orders = await db.execute(
+            "SELECT id, order_id FROM auto_trades WHERE status = 'pending' AND order_id IS NOT NULL"
+        )
+        pending_list = await pending_orders.fetchall()
+    for po in pending_list:
+        try:
+            order_data = await client.get_order(po[1])
+            order_info = order_data.get("order", order_data)
+            filled = int(order_info.get("count_filled", 0) or 0)
+            status = order_info.get("status", "")
+            if filled > 0:
+                async with get_db(db_path) as db:
+                    await db.execute(
+                        "UPDATE auto_trades SET status = 'filled', contracts = ? WHERE id = ?",
+                        (filled, po[0]),
+                    )
+                    await db.commit()
+                logger.info(f"  Order {po[1]} filled: {filled} contracts")
+            elif status in ("canceled", "cancelled"):
+                async with get_db(db_path) as db:
+                    await db.execute("UPDATE auto_trades SET status = 'cancelled' WHERE id = ?", (po[0],))
+                    await db.commit()
+        except Exception:
+            pass
+
     # Also settle any unsettled trades from completed matches
     async with get_db(db_path) as db:
         unsettled = await db.execute(
