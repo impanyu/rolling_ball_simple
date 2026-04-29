@@ -544,6 +544,15 @@ async def _auto_loop():
     client = _get_client()
     logger.info("Auto trading loop started")
 
+    # Clear and re-discover on start
+    from datetime import timedelta as td
+    cdt = timezone(td(hours=-5))
+    today_cdt = datetime.now(cdt).strftime("%Y-%m-%d")
+    async with get_db(db_path) as db:
+        await db.execute("DELETE FROM auto_matches WHERE trade_date = ? AND status = 'upcoming'", (today_cdt,))
+        await db.commit()
+    await _discover_matches(client, db_path)
+
     last_discover = 0
     last_balance_record = -600  # Record immediately on start
     last_start_retry = 0
