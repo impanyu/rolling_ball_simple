@@ -91,6 +91,10 @@ class KalshiClient:
         """Fetch a single market by ticker."""
         return await self._request("GET", f"/markets/{ticker}")
 
+    async def get_order(self, order_id: str) -> dict[str, Any]:
+        """Check order status."""
+        return await self._request("GET", f"/portfolio/orders/{order_id}")
+
     async def get_balance(self) -> dict[str, Any]:
         return await self._request("GET", "/portfolio/balance")
 

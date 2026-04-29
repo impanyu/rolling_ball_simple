@@ -411,14 +411,14 @@ async def _poll_and_trade(client, db_path):
     # Also settle any unsettled trades from completed matches
     async with get_db(db_path) as db:
         unsettled = await db.execute(
-            "SELECT DISTINCT event_ticker FROM auto_trades WHERE status = 'placed'"
+            "SELECT DISTINCT event_ticker FROM auto_trades WHERE status IN ('placed', 'filled')"
         )
         unsettled_events = [r[0] for r in await unsettled.fetchall()]
     for evt in unsettled_events:
         try:
             async with get_db(db_path) as db:
                 pending = await db.execute(
-                    "SELECT id, ticker, side, price, contracts FROM auto_trades WHERE event_ticker = ? AND status = 'placed'",
+                    "SELECT id, ticker, side, price, contracts FROM auto_trades WHERE event_ticker = ? AND status IN ('placed', 'filled')",
                     (evt,),
                 )
                 for trade in await pending.fetchall():
@@ -468,7 +468,7 @@ async def _poll_and_trade(client, db_path):
                     )
                     # Update trade results
                     pending = await db.execute(
-                        "SELECT id, ticker, side, price, contracts FROM auto_trades WHERE event_ticker = ? AND status = 'placed'",
+                        "SELECT id, ticker, side, price, contracts FROM auto_trades WHERE event_ticker = ? AND status IN ('placed', 'filled')",
                         (m["event_ticker"],),
                     )
                     for trade in await pending.fetchall():
@@ -596,7 +596,7 @@ async def _poll_and_trade(client, db_path):
             in_cooldown = False
             async with get_db(db_path) as db:
                 lt_q = await db.execute(
-                    "SELECT created_at FROM auto_trades WHERE event_ticker = ? ORDER BY created_at DESC LIMIT 1",
+                    "SELECT created_at FROM auto_trades WHERE event_ticker = ? AND status IN ('filled', 'settled') ORDER BY created_at DESC LIMIT 1",
                     (m["event_ticker"],),
                 )
                 lt_row = await lt_q.fetchone()
@@ -626,14 +626,35 @@ async def _poll_and_trade(client, db_path):
                     order_id = result.get("order", {}).get("order_id", "")
                     logger.info(f"AUTO TRADE: {signal['rec']} @ {price_cents}c, order={order_id}")
 
+                    # Check if order was filled
+                    import asyncio as _aio
+                    await _aio.sleep(2)  # Brief wait for fill
+                    order_status = "placed"
+                    filled_count = 0
+                    try:
+                        order_data = await client.get_order(order_id)
+                        order_info = order_data.get("order", order_data)
+                        order_status = order_info.get("status", "placed")
+                        filled_count = int(order_info.get("count_filled", 0) or 0)
+                        logger.info(f"  Order {order_id}: status={order_status}, filled={filled_count}/{count}")
+                    except Exception as e:
+                        logger.warning(f"  Order check failed: {e}")
+
+                    if filled_count > 0:
+                        trade_status = "filled"
+                    elif order_status in ("canceled", "cancelled"):
+                        trade_status = "cancelled"
+                    else:
+                        trade_status = "pending"
+
                     async with get_db(db_path) as db:
                         await db.execute(
                             """INSERT INTO auto_trades
                                (event_ticker, ticker, player, side, price, contracts, score_diff, order_id, status, created_at)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'placed', ?)""",
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                             (m["event_ticker"], ticker, signal["buy_player"],
-                             signal["buy_side"], price_cents, count,
-                             signal["diff"], order_id, now_str),
+                             signal["buy_side"], price_cents, filled_count or count,
+                             signal["diff"], order_id, trade_status, now_str),
                         )
                         await db.commit()
 
