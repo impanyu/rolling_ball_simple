@@ -33,3 +33,5 @@ class QueryResponse(BaseModel):
     total_count: int
     histogram: list[HistogramBin]
     stats: Stats
+    win_count: int = 0
+    win_pct: float = 0.0

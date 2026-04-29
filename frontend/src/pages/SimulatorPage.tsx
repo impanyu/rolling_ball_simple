@@ -89,6 +89,13 @@ export default function SimulatorPage() {
         setSimResult(null);
         setProbHistory([]);
         setStatsHistory([]);
+        setPSlopeA(null);
+        setPSlopeB(null);
+        setMaxResult(null);
+        setFirstServer("a");
+        setViewPlayer("a");
+        setUrlA("");
+        setUrlB("");
         try {
             const result = await lookupMatch(input);
             if (result.error) { setError(result.error); return; }

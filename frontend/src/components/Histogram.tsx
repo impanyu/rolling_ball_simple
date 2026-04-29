@@ -139,6 +139,8 @@ export default function Histogram({
             )}
 
             <div style={{ marginTop: 8, fontSize: compact ? 11 : 14, display: "flex", gap: compact ? 8 : 32, flexWrap: "wrap" }}>
+                <div><strong>N:</strong> {data.total_count.toLocaleString()}</div>
+                <div style={{ color: "#27ae60", fontWeight: 600 }}><strong>P(win):</strong> {data.win_count}/{data.total_count} ({data.win_pct}%)</div>
                 <div><strong>E[P]:</strong> {data.stats.mean}{unit}</div>
                 {currentProb !== undefined && (
                     <div style={{ color: data.stats.mean - currentProb >= 0 ? "#27ae60" : "#e74c3c" }}>

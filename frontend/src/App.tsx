@@ -1269,9 +1269,9 @@ function AutoTradingPage() {
             </div>
 
             {/* Trade History */}
-            {trades.length > 0 && (
-                <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
-                    <h4 style={{ marginTop: 0 }}>Trade History</h4>
+            <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
+                <h4 style={{ marginTop: 0 }}>Trade History ({trades.length})</h4>
+                {trades.length === 0 && <div style={{ color: "#888", fontSize: 13 }}>No trades yet.</div>}
                     <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
                         <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
                             <th style={{ padding: 3 }}>Time</th><th style={{ padding: 3 }}>Player</th>
@@ -1294,8 +1294,8 @@ function AutoTradingPage() {
                             ))}
                         </tbody>
                     </table>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }

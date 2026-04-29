@@ -122,6 +122,20 @@ export default function QueryForm({ onSearch, loading }: Props) {
                     step={0.01}
                     placeholder={["0.0", "1.0"]}
                 />
+                <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>
+                        Ranking Comparison
+                    </label>
+                    <select
+                        value={filters.ranking_compare ?? ""}
+                        onChange={(e) => setFilters(prev => ({ ...prev, ranking_compare: e.target.value || undefined }))}
+                        style={{ padding: "4px 8px", width: 210 }}
+                    >
+                        <option value="">Any</option>
+                        <option value="higher">Player ranked higher</option>
+                        <option value="lower">Player ranked lower</option>
+                    </select>
+                </div>
             </div>
             <button
                 type="submit"

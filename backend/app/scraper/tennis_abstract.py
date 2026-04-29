@@ -125,12 +125,12 @@ def compute_prior_from_matches(
 
         if surface:
             surface_filtered = [m for m in date_filtered if m["surface"] == surface.lower()]
-            if len(surface_filtered) >= 3:
+            if len(surface_filtered) >= 10:
                 filtered = surface_filtered
                 logger.info(f"Using {len(filtered)} {surface} matches from last {months} months")
                 break
 
-        if len(date_filtered) >= 3:
+        if len(date_filtered) >= 10:
             filtered = date_filtered
             if surface:
                 logger.warning(f"Not enough {surface} matches, using all {len(filtered)} matches from last {months} months")

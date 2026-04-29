@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Manually trigger a full data fetch from Kalshi + Sackmann.
 
-Usage: cd backend && source .venv/bin/activate && python3 -m scripts.fetch_now
+Usage:
+    cd backend && source .venv/bin/activate
+    python3 -m scripts.fetch_now            # incremental fetch
+    python3 -m scripts.fetch_now --rebuild  # clear DB and re-fetch all
 """
 import asyncio
 import logging
@@ -26,6 +29,8 @@ async def main():
         logger.error("KALSHI_API_KEY_ID not set in .env - cannot fetch data")
         sys.exit(1)
 
+    rebuild = "--rebuild" in sys.argv
+
     await init_db(settings.db_path)
     ensure_repos(settings.sackmann_data_dir)
 
@@ -33,7 +38,7 @@ async def main():
     client = KalshiClient("https://api.elections.kalshi.com/trade-api/v2", auth)
 
     try:
-        await run_full_pipeline(client, settings.db_path, settings.sackmann_data_dir)
+        await run_full_pipeline(client, settings.db_path, settings.sackmann_data_dir, rebuild=rebuild)
         logger.info("Done!")
     finally:
         await client.close()

@@ -86,3 +86,49 @@ class KalshiClient:
         return await self._paginate(
             "GET", "/markets/trades", "trades", {"ticker": ticker, "limit": 1000}
         )
+
+    async def get_market(self, ticker: str) -> dict[str, Any]:
+        """Fetch a single market by ticker."""
+        return await self._request("GET", f"/markets/{ticker}")
+
+    async def get_balance(self) -> dict[str, Any]:
+        return await self._request("GET", "/portfolio/balance")
+
+    async def get_positions(self) -> list[dict[str, Any]]:
+        data = await self._request("GET", "/portfolio/positions")
+        return data.get("market_positions", [])
+
+    async def place_order(
+        self,
+        ticker: str,
+        side: str,
+        action: str,
+        count: int,
+        type: str = "market",
+        yes_price: int | None = None,
+        no_price: int | None = None,
+    ) -> dict[str, Any]:
+        """Place an order on Kalshi.
+        side: 'yes' or 'no'
+        action: 'buy' or 'sell'
+        type: 'market' or 'limit'
+        yes_price/no_price: in cents (1-99) for limit orders
+        """
+        body: dict[str, Any] = {
+            "ticker": ticker,
+            "side": side,
+            "action": action,
+            "count": count,
+            "type": type,
+        }
+        if yes_price is not None:
+            body["yes_price"] = yes_price
+        if no_price is not None:
+            body["no_price"] = no_price
+
+        url = f"{self.base_url}/portfolio/orders"
+        headers = self.auth.get_headers("POST", "/trade-api/v2/portfolio/orders")
+        http = await self._get_http()
+        response = await http.post(url, headers=headers, json=body)
+        response.raise_for_status()
+        return response.json()

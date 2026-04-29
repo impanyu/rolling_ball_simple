@@ -530,13 +530,6 @@ async def auto_match_detail(event_ticker: str):
             "SELECT * FROM auto_matches WHERE event_ticker = ? AND trade_date = ?",
             (event_ticker, today),
         )
-        match = dict(await cursor.fetchone()) if (await cursor.fetchone()) else None
-
-        # Re-query properly
-        cursor = await db.execute(
-            "SELECT * FROM auto_matches WHERE event_ticker = ? AND trade_date = ?",
-            (event_ticker, today),
-        )
         row = await cursor.fetchone()
         match = dict(row) if row else None
 

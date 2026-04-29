@@ -15,6 +15,8 @@ export interface QueryResponse {
     total_count: number;
     histogram: HistogramBin[];
     stats: Stats;
+    win_count: number;
+    win_pct: number;
 }
 
 export interface QueryFilters {
@@ -30,6 +32,7 @@ export interface QueryFilters {
     player_win_rate_3m_max?: number;
     opponent_win_rate_3m_min?: number;
     opponent_win_rate_3m_max?: number;
+    ranking_compare?: string;
 }
 
 export interface ScoreState {
