@@ -422,10 +422,16 @@ async def _poll_and_trade(client, db_path):
             status = order_info.get("status", "")
             if filled > 0 or status == "executed":
                 async with get_db(db_path) as db:
-                    await db.execute(
-                        "UPDATE auto_trades SET status = 'filled', contracts = ? WHERE id = ?",
-                        (filled, po[0]),
-                    )
+                    if filled > 0:
+                        await db.execute(
+                            "UPDATE auto_trades SET status = 'filled', contracts = ? WHERE id = ?",
+                            (filled, po[0]),
+                        )
+                    else:
+                        await db.execute(
+                            "UPDATE auto_trades SET status = 'filled' WHERE id = ?",
+                            (po[0],),
+                        )
                     await db.commit()
                 logger.info(f"  Order {po[1]} filled: {filled} contracts")
             elif status in ("canceled", "cancelled"):
