@@ -467,7 +467,7 @@ async def _auto_loop():
     logger.info("Auto trading loop started")
 
     last_discover = 0
-    last_balance_record = 0
+    last_balance_record = -600  # Record immediately on start
     while True:
         try:
             now_ts = datetime.now(timezone.utc).timestamp()
