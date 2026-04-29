@@ -273,10 +273,9 @@ async def live_matches(q: str = Query("")):
 
 
 async def _estimate_match_start(client, ticker_a: str, db_path: str, player_a: str, player_b: str) -> str | None:
-    """Get match start time. Priority: FlashScore live > DB > trade density."""
-    from datetime import datetime as dt, timedelta
+    """Get match start time from FlashScore only. No unreliable fallbacks."""
 
-    # 1. Scrape FlashScore live page for today's match start time
+    # 1. Scrape FlashScore live page
     try:
         from app.scraper.flashscore_results import scrape_live_match_start
         fs_time = await scrape_live_match_start(player_a, player_b)
@@ -286,6 +285,7 @@ async def _estimate_match_start(client, ticker_a: str, db_path: str, player_a: s
         logger.debug(f"FlashScore live scrape failed: {e}")
 
     # 2. Check match_results table (FlashScore historical)
+    from datetime import datetime as dt
     today = dt.now().strftime("%Y-%m-%d")
     try:
         async with get_db(db_path) as db:
@@ -304,32 +304,8 @@ async def _estimate_match_start(client, ticker_a: str, db_path: str, player_a: s
     except Exception:
         pass
 
-    # 3. Fallback: Kalshi trade density detection
-    try:
-        trades = await client.get_trades(ticker_a)
-        if not trades:
-            return None
-        trades_sorted = sorted(trades, key=lambda t: t["created_time"])
-        if len(trades_sorted) < 10:
-            return trades_sorted[0]["created_time"]
-
-        times = [dt.fromisoformat(t["created_time"].replace("Z", "+00:00")) for t in trades_sorted]
-
-        best_idx = 0
-        best_ratio = 0.0
-        for i in range(5, len(times)):
-            before = times[i] - timedelta(minutes=10)
-            after = times[i] + timedelta(minutes=10)
-            cnt_before = sum(1 for t in times if before <= t < times[i])
-            cnt_after = sum(1 for t in times if times[i] <= t <= after)
-            ratio = cnt_after / max(cnt_before, 1)
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_idx = i
-
-        return trades_sorted[best_idx]["created_time"]
-    except Exception:
-        return None
+    # No fallback — return None if FlashScore can't find it
+    return None
 
 
 @router.get("/api/live-signal/poll")

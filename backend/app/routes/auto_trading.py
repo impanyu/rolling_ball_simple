@@ -199,24 +199,26 @@ async def _discover_matches(client, db_path):
 
     logger.info(f"Auto-discover: {len(selected)} qualifying matches (from {len(candidates)} candidates)")
 
-    # Batch fetch start times from FlashScore (one page load for all matches)
+    # Fetch start times from FlashScore for each selected match
     try:
-        from app.scraper.flashscore_results import scrape_all_match_starts, _fs_name_matches
-        all_starts = await scrape_all_match_starts()
-        async with get_db(db_path) as db:
-            for c in selected:
-                for fs in all_starts:
-                    if (_fs_name_matches(fs["player_a"], c["player_a"]) and _fs_name_matches(fs["player_b"], c["player_b"])) or \
-                       (_fs_name_matches(fs["player_a"], c["player_b"]) and _fs_name_matches(fs["player_b"], c["player_a"])):
+        from app.scraper.flashscore_results import scrape_live_match_start
+        for c in selected:
+            try:
+                start = await scrape_live_match_start(c["player_a"], c["player_b"])
+                if start:
+                    async with get_db(db_path) as db:
                         await db.execute(
                             "UPDATE auto_matches SET match_start = ? WHERE event_ticker = ? AND trade_date = ?",
-                            (fs["start_time"], c["event_ticker"], today),
+                            (start, c["event_ticker"], today),
                         )
-                        logger.info(f"  Start: {c['player_a']} vs {c['player_b']} -> {fs['start_time']}")
-                        break
-            await db.commit()
+                        await db.commit()
+                    logger.info(f"  Start: {c['player_a']} vs {c['player_b']} -> {start}")
+                else:
+                    logger.info(f"  No start time: {c['player_a']} vs {c['player_b']}")
+            except Exception as e:
+                logger.debug(f"  FlashScore failed for {c['player_a']}: {e}")
     except Exception as e:
-        logger.warning(f"FlashScore batch fetch failed: {e}")
+        logger.warning(f"FlashScore fetch failed: {e}")
 
 
 async def _compute_signal(db_path, player_a, player_b, rank_a, rank_b, cp, ip, rmin, rmax, minutes_played, recent_change):
