@@ -152,20 +152,18 @@ async def _discover_matches(client, db_path):
             if not player_a or not player_b:
                 continue
 
-            rank_a = await _get_ranking(db_path, player_a)
-            rank_b = await _get_ranking(db_path, player_b)
-
-            if not rank_a or not rank_b or rank_a > 500 or rank_b > 500:
-                continue
-
             volume = float(event_markets[0].get("volume", event_markets[0].get("volume_fp", 0)))
             if volume < 5000:
                 continue
 
+            rank_a = await _get_ranking(db_path, player_a)
+            rank_b = await _get_ranking(db_path, player_b)
+
             price_a = round(float(event_markets[0].get("last_price_dollars", 0)) * 100)
 
-            # Priority: lower combined rank + higher volume = better
-            priority = (1000 - rank_a - rank_b) + min(volume / 100, 500)
+            # Priority: higher volume + lower combined rank = better
+            rank_score = (1000 - (rank_a or 500) - (rank_b or 500))
+            priority = rank_score + min(volume / 100, 500)
 
             candidates.append({
                 "event_ticker": event_ticker,
