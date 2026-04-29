@@ -249,8 +249,8 @@ export async function autoTradingStop(): Promise<{ status: string }> {
     const resp = await fetch("/api/auto-trading/stop", { method: "POST" });
     return resp.json();
 }
-export async function autoTradingStatus(): Promise<any> {
-    const resp = await fetch("/api/auto-trading/status");
+export async function autoTradingStatus(completedPage: number = 1): Promise<any> {
+    const resp = await fetch(`/api/auto-trading/status?completed_page=${completedPage}`);
     return resp.json();
 }
 export async function autoTradingBalance(): Promise<any> {

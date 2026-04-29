@@ -3,7 +3,7 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 from collections import defaultdict
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 import app.config
 from app.database import get_db, init_db
 from app.kalshi.auth import KalshiAuth
@@ -705,7 +705,7 @@ async def auto_stop():
 
 
 @router.get("/api/auto-trading/status")
-async def auto_status():
+async def auto_status(completed_page: int = Query(1)):
     running = _auto_task is not None and not _auto_task.done()
     db_path = app.config.settings.db_path
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -720,11 +720,17 @@ async def auto_status():
         )
         active_matches = [dict(r) for r in await cursor.fetchall()]
 
-        # Completed matches: all time (for history)
+        # Completed matches: paginated, newest first
+        page_size = 50
+        offset = (completed_page - 1) * page_size
         cursor2_c = await db.execute(
-            "SELECT * FROM auto_matches WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 100",
+            "SELECT * FROM auto_matches WHERE status = 'completed' ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            (page_size, offset),
         )
         completed_matches = [dict(r) for r in await cursor2_c.fetchall()]
+
+        cursor_total = await db.execute("SELECT COUNT(*) FROM auto_matches WHERE status = 'completed'")
+        completed_total = (await cursor_total.fetchone())[0]
 
         matches = active_matches + completed_matches
 
@@ -748,6 +754,9 @@ async def auto_status():
             "upcoming": upcoming,
             "total_trades": len(trades),
             "total_pnl": round(total_pnl, 2),
+            "completed_total": completed_total,
+            "completed_page": completed_page,
+            "completed_pages": (completed_total + 49) // 50,
         },
     }
 

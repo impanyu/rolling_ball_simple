@@ -1099,15 +1099,18 @@ function AutoTradingPage() {
     const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
     const [matchDetail, setMatchDetail] = useState<any>(null);
     const [loading, setLoading] = useState(false);
+    const [completedPage, setCompletedPage] = useState(1);
+    const [completedPages, setCompletedPages] = useState(1);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const loadStatus = async () => {
+    const loadStatus = async (page?: number) => {
         try {
-            const data = await autoTradingStatus();
+            const data = await autoTradingStatus(page || completedPage);
             setRunning(data.running);
             setMatches(data.matches || []);
             setTrades(data.trades || []);
             setSummary(data.summary || {});
+            if (data.summary?.completed_pages) setCompletedPages(data.summary.completed_pages);
         } catch {}
     };
 
@@ -1526,11 +1529,12 @@ function AutoTradingPage() {
                     const matchTrades = (et: string) => trades.filter(t => t.event_ticker === et);
                     const completed = matches.filter(m => m.status === "completed" && matchTrades(m.event_ticker).length > 0);
                     if (completed.length === 0) return <div style={{ color: "#888", fontSize: 13 }}>No completed trades yet.</div>;
-                    return (
+                    return (<>
                         <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
                             <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
-                                <th style={{ padding: 4 }}>Match</th><th style={{ padding: 4 }}>Trades</th>
-                                <th style={{ padding: 4 }}>Won</th><th style={{ padding: 4 }}>P&L</th><th style={{ padding: 4 }}></th>
+                                <th style={{ padding: 4 }}>Match</th><th style={{ padding: 4 }}>Time</th>
+                                <th style={{ padding: 4 }}>Trades</th><th style={{ padding: 4 }}>Won</th>
+                                <th style={{ padding: 4 }}>P&L</th><th style={{ padding: 4 }}></th>
                             </tr></thead>
                             <tbody>
                                 {completed.map((m, i) => {
@@ -1541,6 +1545,7 @@ function AutoTradingPage() {
                                     return (
                                         <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
                                             <td style={{ padding: 4 }}>{m.player_a} vs {m.player_b}</td>
+                                            <td style={{ padding: 4, fontSize: 11 }}>{m.match_start ? new Date(m.match_start).toLocaleString() : "-"}</td>
                                             <td style={{ padding: 4 }}>{mt.length}</td>
                                             <td style={{ padding: 4 }}>{wins.length}/{settled.length}</td>
                                             <td style={{ padding: 4, fontWeight: 600, color: pnl >= 0 ? "#27ae60" : "#e74c3c" }}>
@@ -1555,7 +1560,16 @@ function AutoTradingPage() {
                                 })}
                             </tbody>
                         </table>
-                    );
+                        {completedPages > 1 && (
+                            <div style={{ marginTop: 8, display: "flex", gap: 8, justifyContent: "center" }}>
+                                <button disabled={completedPage <= 1} onClick={() => { setCompletedPage(p => p-1); loadStatus(completedPage-1); }}
+                                    style={{ cursor: "pointer", padding: "2px 8px" }}>Prev</button>
+                                <span style={{ fontSize: 12 }}>Page {completedPage} / {completedPages}</span>
+                                <button disabled={completedPage >= completedPages} onClick={() => { setCompletedPage(p => p+1); loadStatus(completedPage+1); }}
+                                    style={{ cursor: "pointer", padding: "2px 8px" }}>Next</button>
+                            </div>
+                        )}
+                    </>);
                 })()}
             </div>
         </div>
