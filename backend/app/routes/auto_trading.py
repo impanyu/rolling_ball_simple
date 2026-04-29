@@ -325,7 +325,7 @@ async def _compute_signal(db_path, player_a, player_b, rank_a, rank_b, cp, ip, r
 async def _poll_and_trade(client, db_path):
     """Poll active matches, compute signals, execute trades."""
     now = datetime.now(timezone.utc)
-    now_str = now.isoformat() + "Z"
+    now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     today = now.strftime("%Y-%m-%d")
 
     async with get_db(db_path) as db:
