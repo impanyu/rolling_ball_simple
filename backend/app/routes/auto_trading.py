@@ -39,15 +39,41 @@ def _get_client() -> KalshiClient:
 
 
 async def _get_ranking(db_path: str, player_name: str) -> int | None:
+    parts = player_name.strip().lower().split()
+    if not parts:
+        return None
     async with get_db(db_path) as db:
-        for pattern in [player_name.lower(), f"%{player_name.split()[-1].lower()}"]:
+        # Try exact match
+        cursor = await db.execute(
+            "SELECT ranking FROM flashscore_rankings WHERE player_name = ? LIMIT 1",
+            (player_name.lower(),),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+
+        # Try matching all name parts (handles different name orders)
+        # e.g. "Beatriz Haddad Maia" → DB has "maia beatriz haddad"
+        if len(parts) >= 2:
+            conditions = " AND ".join(["player_name LIKE ?" for _ in parts])
+            params = [f"%{p}%" for p in parts]
             cursor = await db.execute(
-                "SELECT ranking FROM flashscore_rankings WHERE player_name LIKE ? LIMIT 1",
-                (pattern,),
+                f"SELECT ranking FROM flashscore_rankings WHERE {conditions} LIMIT 1",
+                params,
             )
             row = await cursor.fetchone()
             if row:
                 return row[0]
+
+        # Try last name only
+        cursor = await db.execute(
+            "SELECT ranking FROM flashscore_rankings WHERE player_name LIKE ? LIMIT 1",
+            (f"%{parts[-1]}%",),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+
     return None
 
 
@@ -159,11 +185,13 @@ async def _discover_matches(client, db_path):
             rank_a = await _get_ranking(db_path, player_a)
             rank_b = await _get_ranking(db_path, player_b)
 
+            if not rank_a or not rank_b or rank_a > 500 or rank_b > 500:
+                continue
+
             price_a = round(float(event_markets[0].get("last_price_dollars", 0)) * 100)
 
-            # Priority: higher volume + lower combined rank = better
-            rank_score = (1000 - (rank_a or 500) - (rank_b or 500))
-            priority = rank_score + min(volume / 100, 500)
+            # Priority: lower combined rank + higher volume = better
+            priority = (1000 - rank_a - rank_b) + min(volume / 100, 500)
 
             candidates.append({
                 "event_ticker": event_ticker,
