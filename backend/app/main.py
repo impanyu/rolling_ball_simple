@@ -173,7 +173,7 @@ async def lifespan(fastapi_app: FastAPI):
         scheduler.add_job(
             prepare_daily_matches,
             "cron",
-            hour=5,
+            hour=0,
             minute=0,
             id="daily_match_prep",
         )
@@ -181,7 +181,7 @@ async def lifespan(fastapi_app: FastAPI):
     scheduler.start()
     if s.kalshi_api_key_id:
         logger.info(
-            f"Scheduler started: Kalshi fetch at {s.fetch_cron_hour:02d}:{s.fetch_cron_minute:02d}, winrates at 04:00, match prep at 05:00"
+            f"Scheduler started: Kalshi fetch at {s.fetch_cron_hour:02d}:{s.fetch_cron_minute:02d}, winrates at 04:00, match prep at 00:00"
         )
     else:
         logger.info("Scheduler started: winrates at 04:00 (no Kalshi API key)")
