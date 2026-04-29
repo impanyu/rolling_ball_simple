@@ -1272,7 +1272,7 @@ function AutoTradingPage() {
                 {(() => {
                     const active = matches.filter(m => m.status === "upcoming" || m.status === "active");
                     return <>
-                <h4 style={{ marginTop: 0 }}>Active Matches ({active.length})</h4>
+                <h4 style={{ marginTop: 0 }}>Trading Matches ({active.length})</h4>
                 {active.length === 0 && <div style={{ color: "#888", fontSize: 13 }}>No active matches.</div>}
                 <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
                     <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
@@ -1313,9 +1313,9 @@ function AutoTradingPage() {
             <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
                 <h4 style={{ marginTop: 0 }}>Completed Matches</h4>
                 {(() => {
-                    const completed = matches.filter(m => m.status === "completed");
-                    if (completed.length === 0) return <div style={{ color: "#888", fontSize: 13 }}>No completed matches yet.</div>;
                     const matchTrades = (et: string) => trades.filter(t => t.event_ticker === et);
+                    const completed = matches.filter(m => m.status === "completed" && matchTrades(m.event_ticker).length > 0);
+                    if (completed.length === 0) return <div style={{ color: "#888", fontSize: 13 }}>No completed trades yet.</div>;
                     return (
                         <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
                             <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
