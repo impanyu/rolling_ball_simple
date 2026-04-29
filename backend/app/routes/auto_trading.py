@@ -592,9 +592,19 @@ async def _poll_and_trade(client, db_path):
                 )
                 await db.commit()
 
-            # Execute trade only with confirmed start time and active match + cooldown check
-            in_cooldown = False
+            # Execute trade only with confirmed start time and active match
+            skip_trade = False
             async with get_db(db_path) as db:
+                # Skip if pending orders exist for this match
+                pending_q = await db.execute(
+                    "SELECT COUNT(*) FROM auto_trades WHERE event_ticker = ? AND status = 'pending'",
+                    (m["event_ticker"],),
+                )
+                pending_count = (await pending_q.fetchone())[0]
+                if pending_count > 0:
+                    skip_trade = True
+
+                # Cooldown: only count filled trades
                 lt_q = await db.execute(
                     "SELECT created_at FROM auto_trades WHERE event_ticker = ? AND status IN ('filled', 'settled') ORDER BY created_at DESC LIMIT 1",
                     (m["event_ticker"],),
@@ -605,11 +615,11 @@ async def _poll_and_trade(client, db_path):
                     ts = lt_row[0].replace("+00:00Z", "Z").replace("Z", "+00:00")
                     last_t = datetime.fromisoformat(ts)
                     if (now - last_t).total_seconds() < COOLDOWN_MINUTES * 60:
-                        in_cooldown = True
+                        skip_trade = True
                 except Exception:
                     pass
 
-            if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start") and not in_cooldown:
+            if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start") and not skip_trade:
                 # Place order: each "unit" = 10 contracts
                 ticker = m["ticker_a"] if signal["buy_ticker_idx"] == 0 else m["ticker_b"]
                 try:
