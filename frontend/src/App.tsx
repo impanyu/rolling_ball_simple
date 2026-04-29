@@ -1155,46 +1155,108 @@ function AutoTradingPage() {
     const statusColor = (s: string) => s === "active" ? "#27ae60" : s === "upcoming" ? "#3498db" : "#888";
     const sigColor = (s: string) => s === "STRONG" ? "#27ae60" : s === "MODERATE" ? "#e67e22" : s === "WEAK" ? "#888" : "#ccc";
 
+    // Auto-refresh match detail
+    useEffect(() => {
+        if (!selectedMatch) return;
+        const iv = setInterval(async () => {
+            try {
+                const data = await autoTradingMatchDetail(selectedMatch);
+                setMatchDetail(data);
+            } catch {}
+        }, 15000);
+        return () => clearInterval(iv);
+    }, [selectedMatch]);
+
     if (selectedMatch && matchDetail) {
         const m = matchDetail.match;
         const history = matchDetail.history || [];
+        const mTrades = matchDetail.trades || [];
+        const settled = mTrades.filter((t: any) => t.status === "settled");
+        const totalPnl = settled.reduce((s: number, t: any) => s + (t.pnl || 0), 0);
+        const sigC = sigColor(m?.last_rec?.split(" ")[0] || "");
         return (
             <div style={{ padding: 20 }}>
                 <button onClick={() => { setSelectedMatch(null); setMatchDetail(null); }} style={{ marginBottom: 12, cursor: "pointer" }}>Back to List</button>
                 <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 20 }}>
-                    <h3 style={{ margin: 0 }}>{m?.player_a} (#{m?.rank_a}) vs {m?.player_b} (#{m?.rank_b})</h3>
-                    <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
-                        Status: <strong style={{ color: statusColor(m?.status) }}>{m?.status}</strong>
-                        {m?.match_start && <> | Started: {new Date(m.match_start).toLocaleString()}</>}
-                        | Price: <strong>{m?.current_price}</strong>
+                    {/* Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                            <h3 style={{ margin: 0 }}>{m?.player_a} (#{m?.rank_a}) vs {m?.player_b} (#{m?.rank_b})</h3>
+                            <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                                Status: <strong style={{ color: statusColor(m?.status) }}>{m?.status}</strong>
+                                {m?.match_start && <> | Started: {new Date(m.match_start).toLocaleString()}</>}
+                                | Price: <strong>{m?.current_price}</strong> - <strong>{100 - (m?.current_price || 50)}</strong>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Signal Box */}
                     {m?.last_rec && (
-                        <div style={{ fontSize: 20, fontWeight: 700, color: sigColor(m?.last_rec?.split(" ")[0] || ""), marginTop: 8 }}>
-                            {m.last_rec}
+                        <div style={{ padding: 16, border: `3px solid ${sigC}`, borderRadius: 8, marginTop: 12, marginBottom: 16 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ fontSize: 24, fontWeight: 700, color: sigC }}>{m.last_rec}</div>
+                                <div style={{ fontSize: 13 }}>
+                                    Score diff: <strong>{m.last_diff}</strong>
+                                </div>
+                            </div>
                         </div>
                     )}
+
+                    {/* Price Chart */}
                     {history.length > 1 && (
-                        <div style={{ marginTop: 16 }}>
-                            <ResponsiveContainer width="100%" height={200}>
-                                <LineChart data={history}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="t" fontSize={10} interval="preserveStartEnd" />
-                                    <YAxis domain={[0, 100]} fontSize={10} />
-                                    <Tooltip />
-                                    <Line type="monotone" dataKey="cp" stroke="#3498db" dot={false} strokeWidth={2} name="Price A" />
-                                </LineChart>
-                            </ResponsiveContainer>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                            <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Price</div>
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <LineChart data={history}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="t" fontSize={9} interval="preserveStartEnd"
+                                            tickFormatter={(t: string) => t.length > 10 ? new Date(t).toLocaleTimeString() : t} />
+                                        <YAxis domain={[0, 100]} fontSize={10} />
+                                        <Tooltip contentStyle={{ fontSize: 12 }} />
+                                        <ReferenceLine y={50} stroke="#ccc" strokeDasharray="3 3" />
+                                        <Line type="monotone" dataKey="cp" stroke="#3498db" dot={false} strokeWidth={2} name={m?.player_a || "A"} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Minutes Played</div>
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <LineChart data={history}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="t" fontSize={9} interval="preserveStartEnd"
+                                            tickFormatter={(t: string) => t.length > 10 ? new Date(t).toLocaleTimeString() : t} />
+                                        <YAxis fontSize={10} />
+                                        <Tooltip contentStyle={{ fontSize: 12 }} />
+                                        <Line type="monotone" dataKey="min" stroke="#e67e22" dot={false} strokeWidth={2} name="Minutes" />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     )}
-                    {matchDetail.trades?.length > 0 && (
-                        <div style={{ marginTop: 16 }}>
-                            <h4>Trades for this match</h4>
+
+                    {/* Trade History */}
+                    <div style={{ marginTop: 16 }}>
+                        <h4 style={{ marginTop: 0 }}>
+                            Trades ({mTrades.length})
+                            {settled.length > 0 && (
+                                <span style={{ fontSize: 13, fontWeight: 400, marginLeft: 12, color: totalPnl >= 0 ? "#27ae60" : "#e74c3c" }}>
+                                    P&L: ${(totalPnl / 100).toFixed(2)} | Won: {settled.filter((t: any) => t.won).length}/{settled.length}
+                                </span>
+                            )}
+                        </h4>
+                        {mTrades.length === 0 ? (
+                            <div style={{ color: "#888", fontSize: 13 }}>No trades placed for this match.</div>
+                        ) : (
                             <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                                <thead><tr style={{ borderBottom: "2px solid #ddd" }}>
-                                    <th style={{ padding: 4 }}>Time</th><th>Player</th><th>Side</th><th>Price</th><th>Qty</th><th>Diff</th><th>Status</th>
+                                <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
+                                    <th style={{ padding: 4 }}>Time</th><th style={{ padding: 4 }}>Player</th>
+                                    <th style={{ padding: 4 }}>Side</th><th style={{ padding: 4 }}>Price</th>
+                                    <th style={{ padding: 4 }}>Qty</th><th style={{ padding: 4 }}>Diff</th>
+                                    <th style={{ padding: 4 }}>Status</th><th style={{ padding: 4 }}>P&L</th>
                                 </tr></thead>
                                 <tbody>
-                                    {matchDetail.trades.map((t: any, i: number) => (
+                                    {mTrades.map((t: any, i: number) => (
                                         <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
                                             <td style={{ padding: 4 }}>{t.created_at ? new Date(t.created_at).toLocaleTimeString() : ""}</td>
                                             <td style={{ padding: 4 }}>{t.player}</td>
@@ -1202,13 +1264,18 @@ function AutoTradingPage() {
                                             <td style={{ padding: 4 }}>{t.price}c</td>
                                             <td style={{ padding: 4 }}>x{t.contracts}</td>
                                             <td style={{ padding: 4 }}>{t.score_diff}</td>
-                                            <td style={{ padding: 4 }}>{t.status}</td>
+                                            <td style={{ padding: 4, color: t.status === "placed" ? "#3498db" : t.won ? "#27ae60" : "#e74c3c", fontWeight: 600 }}>
+                                                {t.status}{t.won != null ? (t.won ? " (W)" : " (L)") : ""}
+                                            </td>
+                                            <td style={{ padding: 4, fontWeight: 600, color: (t.pnl || 0) >= 0 ? "#27ae60" : "#e74c3c" }}>
+                                                {t.pnl != null ? `$${(t.pnl / 100).toFixed(2)}` : "-"}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
         );
