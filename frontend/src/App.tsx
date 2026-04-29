@@ -1269,8 +1269,11 @@ function AutoTradingPage() {
 
             {/* Match List */}
             <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-                <h4 style={{ marginTop: 0 }}>Today's Matches ({matches.length})</h4>
-                {matches.length === 0 && <div style={{ color: "#888", fontSize: 13 }}>No matches. Click Discover to find matches.</div>}
+                {(() => {
+                    const active = matches.filter(m => m.status === "upcoming" || m.status === "active");
+                    return <>
+                <h4 style={{ marginTop: 0 }}>Active Matches ({active.length})</h4>
+                {active.length === 0 && <div style={{ color: "#888", fontSize: 13 }}>No active matches.</div>}
                 <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
                     <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
                         <th style={{ padding: 4 }}>Status</th>
@@ -1281,7 +1284,7 @@ function AutoTradingPage() {
                         <th style={{ padding: 4 }}></th>
                     </tr></thead>
                     <tbody>
-                        {matches.map((m, i) => (
+                        {active.map((m, i) => (
                             <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
                                 <td style={{ padding: 4 }}>
                                     <span style={{ color: statusColor(m.status), fontWeight: 600 }}>{m.status}</span>
@@ -1302,6 +1305,8 @@ function AutoTradingPage() {
                         ))}
                     </tbody>
                 </table>
+                </>;
+                })()}
             </div>
 
             {/* Completed Matches */}
