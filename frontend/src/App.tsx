@@ -1224,17 +1224,11 @@ function AutoTradingPage() {
                         {" | "}Trades: <strong>{summary.total_trades || 0}</strong>
                     </span>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={handleDiscover} disabled={loading}
-                        style={{ padding: "6px 14px", cursor: "pointer", fontSize: 12 }}>
-                        Discover
-                    </button>
-                    <button onClick={handleToggle} disabled={loading}
-                        style={{ padding: "6px 20px", cursor: "pointer", fontSize: 13, fontWeight: 600,
-                                 background: running ? "#e74c3c" : "#27ae60", color: "white", border: "none", borderRadius: 4 }}>
-                        {loading ? "..." : running ? "Stop Auto Trading" : "Start Auto Trading"}
-                    </button>
-                </div>
+                <button onClick={handleToggle} disabled={loading}
+                    style={{ padding: "6px 20px", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                             background: running ? "#e74c3c" : "#27ae60", color: "white", border: "none", borderRadius: 4 }}>
+                    {loading ? "..." : running ? "Stop Auto Trading" : "Start Auto Trading"}
+                </button>
             </div>
 
             {/* Match List */}
