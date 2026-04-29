@@ -278,7 +278,7 @@ async def _estimate_match_start(client, ticker_a: str, db_path: str, player_a: s
     # 1. Scrape FlashScore live page
     try:
         from app.scraper.flashscore_results import scrape_live_match_start
-        fs_time = await scrape_live_match_start(player_a, player_b)
+        fs_time = await scrape_live_match_start(player_a, player_b, db_path)
         if fs_time:
             return fs_time
     except Exception as e:
@@ -350,7 +350,7 @@ async def live_poll(
     if not match_start:
         try:
             from app.scraper.flashscore_results import scrape_live_match_start
-            match_start = await scrape_live_match_start(player_a, player_b)
+            match_start = await scrape_live_match_start(player_a, player_b, db_path)
         except Exception as e:
             logger.warning(f"FlashScore scrape failed: {e}")
         if not match_start:

@@ -129,38 +129,78 @@ async def scrape_all_match_starts() -> list[dict]:
     return results
 
 
-async def scrape_live_match_start(player_a: str, player_b: str) -> str | None:
-    """Scrape FlashScore to find start time of a live/today match.
+async def scrape_live_match_start(player_a: str, player_b: str, db_path: str = None) -> str | None:
+    """Scrape FlashScore to find start time of a match.
 
-    1. Search FlashScore tennis page for the match
-    2. Click into match detail page
-    3. Read duelParticipant__startTime for precise start time
+    1. Look up player's FlashScore page from DB
+    2. Find the opponent match on the player page
+    3. Click into match detail page for precise start time
 
     Returns ISO timestamp string (UTC) or None if not found.
     """
     browser = await get_browser()
     page = await browser.new_page()
 
+    last_a = player_a.split()[-1].lower() if player_a else ""
+    last_b = player_b.split()[-1].lower() if player_b else ""
+
     try:
-        await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
-        await page.wait_for_timeout(4000)
+        # Try to find player's FlashScore page from DB
+        player_href = None
+        if db_path:
+            try:
+                import aiosqlite
+                async with aiosqlite.connect(db_path) as db:
+                    for name in [last_a, last_b]:
+                        cursor = await db.execute(
+                            "SELECT href FROM flashscore_rankings WHERE player_name LIKE ? LIMIT 1",
+                            (f"%{name}%",),
+                        )
+                        row = await cursor.fetchone()
+                        if row and row[0]:
+                            player_href = row[0]
+                            break
+            except Exception:
+                pass
 
-        last_a = player_a.split()[-1].lower() if player_a else ""
-        last_b = player_b.split()[-1].lower() if player_b else ""
+        match_url = None
 
-        # Find match detail URL from the listing page
-        match_url = await page.evaluate("""(args) => {
-            const [lastA, lastB] = args;
-            const rows = document.querySelectorAll('[class*="event__match"]');
-            for (const row of rows) {
-                const text = row.textContent.toLowerCase();
-                if (text.includes(lastA) && text.includes(lastB)) {
-                    const a = row.querySelector('a[href]');
-                    if (a) return a.getAttribute('href');
+        if player_href:
+            # Visit player page to find the specific match
+            url = f"https://www.flashscoreusa.com{player_href}"
+            await page.goto(url, timeout=15000)
+            await page.wait_for_timeout(3000)
+
+            match_url = await page.evaluate("""(args) => {
+                const [lastA, lastB] = args;
+                const rows = document.querySelectorAll('[class*="event__match"]');
+                for (const row of rows) {
+                    const text = row.textContent.toLowerCase();
+                    if (text.includes(lastA) && text.includes(lastB)) {
+                        const a = row.querySelector('a[href]');
+                        if (a) return a.getAttribute('href');
+                    }
                 }
-            }
-            return null;
-        }""", [last_a, last_b])
+                return null;
+            }""", [last_a, last_b])
+
+        if not match_url:
+            # Fallback: try FlashScore tennis main page
+            await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
+            await page.wait_for_timeout(4000)
+
+            match_url = await page.evaluate("""(args) => {
+                const [lastA, lastB] = args;
+                const rows = document.querySelectorAll('[class*="event__match"]');
+                for (const row of rows) {
+                    const text = row.textContent.toLowerCase();
+                    if (text.includes(lastA) && text.includes(lastB)) {
+                        const a = row.querySelector('a[href]');
+                        if (a) return a.getAttribute('href');
+                    }
+                }
+                return null;
+            }""", [last_a, last_b])
 
         if not match_url:
             logger.debug(f"FlashScore: no match found for {player_a} vs {player_b}")

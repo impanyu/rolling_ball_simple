@@ -121,7 +121,9 @@ async def _init_auto_tables(db_path):
 
 async def _discover_matches(client, db_path):
     """Find qualifying matches: both ranked ≤ 500, sufficient volume."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    from datetime import timedelta
+    cdt = timezone(timedelta(hours=-5))
+    today = datetime.now(cdt).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat() + "Z"
     candidates = []
 
@@ -204,7 +206,7 @@ async def _discover_matches(client, db_path):
         from app.scraper.flashscore_results import scrape_live_match_start
         for c in selected:
             try:
-                start = await scrape_live_match_start(c["player_a"], c["player_b"])
+                start = await scrape_live_match_start(c["player_a"], c["player_b"], db_path)
                 if start:
                     async with get_db(db_path) as db:
                         await db.execute(
@@ -405,7 +407,7 @@ async def _poll_and_trade(client, db_path):
                             # Try FlashScore
                             try:
                                 from app.scraper.flashscore_results import scrape_live_match_start
-                                fs_start = await scrape_live_match_start(m["player_a"], m["player_b"])
+                                fs_start = await scrape_live_match_start(m["player_a"], m["player_b"], db_path)
                                 if fs_start:
                                     async with get_db(db_path) as db:
                                         await db.execute(
@@ -496,6 +498,45 @@ async def _poll_and_trade(client, db_path):
             logger.debug(f"Poll error for {m['event_ticker']}: {e}")
 
 
+async def _retry_unknown_starts(db_path):
+    """Retry fetching FlashScore start times for matches with unknown start."""
+    from datetime import timedelta
+    import pytz
+    # Today in CDT
+    cdt = timezone(timedelta(hours=-5))
+    today_cdt = datetime.now(cdt).strftime("%Y-%m-%d")
+
+    async with get_db(db_path) as db:
+        cursor = await db.execute(
+            "SELECT event_ticker, player_a, player_b FROM auto_matches WHERE trade_date = ? AND match_start IS NULL AND status IN ('upcoming', 'in_progress')",
+            (today_cdt,),
+        )
+        unknown = await cursor.fetchall()
+
+    if not unknown:
+        return
+
+    logger.info(f"Retrying start times for {len(unknown)} matches")
+    try:
+        from app.scraper.flashscore_results import scrape_live_match_start
+        for row in unknown:
+            evt, pa, pb = row
+            try:
+                start = await scrape_live_match_start(pa, pb, db_path)
+                if start:
+                    async with get_db(db_path) as db:
+                        await db.execute(
+                            "UPDATE auto_matches SET match_start = ? WHERE event_ticker = ?",
+                            (start, evt),
+                        )
+                        await db.commit()
+                    logger.info(f"  Found start: {pa} vs {pb} -> {start}")
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"Retry start times failed: {e}")
+
+
 async def _auto_loop():
     """Main auto trading loop."""
     db_path = app.config.settings.db_path
@@ -505,6 +546,7 @@ async def _auto_loop():
 
     last_discover = 0
     last_balance_record = -600  # Record immediately on start
+    last_start_retry = 0
     while True:
         try:
             now_ts = datetime.now(timezone.utc).timestamp()
@@ -512,6 +554,11 @@ async def _auto_loop():
             if now_ts - last_discover >= DISCOVER_INTERVAL:
                 await _discover_matches(client, db_path)
                 last_discover = now_ts
+
+            # Retry fetching start times for unknown matches every 30 min
+            if now_ts - last_start_retry >= 1800:
+                await _retry_unknown_starts(db_path)
+                last_start_retry = now_ts
 
             # Record balance every 10 minutes
             if now_ts - last_balance_record >= 600:
