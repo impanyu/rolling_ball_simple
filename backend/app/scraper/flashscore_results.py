@@ -24,6 +24,111 @@ def _fs_name_matches(fs_name: str, kalshi_name: str) -> bool:
     return last in fs_lower and first_initial in fs_lower
 
 
+async def scrape_all_match_starts() -> list[dict]:
+    """Scrape FlashScore tennis page once, return all matches with start times."""
+    browser = await get_browser()
+    page = await browser.new_page()
+    results = []
+
+    try:
+        await page.goto("https://www.flashscoreusa.com/tennis/", timeout=15000)
+        await page.wait_for_timeout(4000)
+
+        # Get all match rows with links
+        match_rows = await page.evaluate("""() => {
+            const rows = document.querySelectorAll('[class*="event__match"]');
+            const results = [];
+            for (const row of rows) {
+                const text = row.textContent.trim().toLowerCase();
+                const a = row.querySelector('a[href]');
+                const href = a ? a.getAttribute('href') : null;
+                // Extract participant names
+                const parts = text.split(/\\d/)[0].trim();
+                results.push({text: text.substring(0, 200), href: href});
+            }
+            return results;
+        }""")
+
+        # For each match with a link, visit detail page to get start time
+        seen_hrefs = set()
+        for row in match_rows:
+            href = row.get("href")
+            if not href or href in seen_hrefs:
+                continue
+            seen_hrefs.add(href)
+
+            if not href.startswith("http"):
+                href = "https://www.flashscoreusa.com" + href
+
+            try:
+                await page.goto(href, timeout=10000)
+                await page.wait_for_timeout(1500)
+
+                data = await page.evaluate("""() => {
+                    const startEl = document.querySelector('[class*="startTime"]');
+                    const homeEl = document.querySelectorAll('[class*="participant__participantName"]');
+                    const names = [];
+                    homeEl.forEach(el => names.push(el.textContent.trim()));
+                    return {
+                        start_text: startEl ? startEl.textContent.trim() : null,
+                        players: names,
+                    };
+                }""")
+
+                if data.get("start_text") and len(data.get("players", [])) >= 2:
+                    import time as _time
+                    start_text = data["start_text"]
+                    month_map = {"january":1,"february":2,"march":3,"april":4,"may":5,"june":6,
+                                 "july":7,"august":8,"september":9,"october":10,"november":11,"december":12}
+
+                    parsed = None
+                    m = re.match(r'(\d{1,2}):(\d{2})\s*(AM|PM),?\s*(\w+)\s+(\d{1,2}),?\s*(\d{4})', start_text)
+                    if m:
+                        hour = int(m.group(1))
+                        minute = int(m.group(2))
+                        ampm = m.group(3)
+                        if ampm == "PM" and hour != 12: hour += 12
+                        elif ampm == "AM" and hour == 12: hour = 0
+                        mon = month_map.get(m.group(4).lower(), 1)
+                        day = int(m.group(5))
+                        year = int(m.group(6))
+                        utc_offset = _time.timezone if _time.daylight == 0 else _time.altzone
+                        local_dt = datetime(year, mon, day, hour, minute)
+                        utc_dt = local_dt + timedelta(seconds=utc_offset)
+                        parsed = utc_dt.isoformat() + "Z"
+
+                    if not parsed:
+                        m2 = re.match(r'(\d{1,2}):(\d{2}),?\s*(\d{1,2})\s+(\w+)\s+(\d{4})', start_text)
+                        if m2:
+                            hour = int(m2.group(1))
+                            minute = int(m2.group(2))
+                            day = int(m2.group(3))
+                            mon = month_map.get(m2.group(4).lower(), 1)
+                            year = int(m2.group(5))
+                            utc_offset = _time.timezone if _time.daylight == 0 else _time.altzone
+                            local_dt = datetime(year, mon, day, hour, minute)
+                            utc_dt = local_dt + timedelta(seconds=utc_offset)
+                            parsed = utc_dt.isoformat() + "Z"
+
+                    if parsed:
+                        results.append({
+                            "player_a": data["players"][0],
+                            "player_b": data["players"][1] if len(data["players"]) > 1 else "",
+                            "start_time": parsed,
+                        })
+
+            except Exception:
+                continue
+
+    except Exception as e:
+        logger.warning(f"Failed to scrape FlashScore batch: {e}")
+    finally:
+        await page.close()
+
+    logger.info(f"FlashScore batch: found {len(results)} match start times")
+    return results
+
+
 async def scrape_live_match_start(player_a: str, player_b: str) -> str | None:
     """Scrape FlashScore to find start time of a live/today match.
 

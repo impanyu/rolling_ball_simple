@@ -199,22 +199,22 @@ async def _discover_matches(client, db_path):
 
     logger.info(f"Auto-discover: {len(selected)} qualifying matches (from {len(candidates)} candidates)")
 
-    # Batch fetch start times from FlashScore
+    # Batch fetch start times from FlashScore (one page load for all matches)
     try:
-        from app.scraper.flashscore_results import scrape_live_match_start
-        for c in selected:
-            try:
-                start = await scrape_live_match_start(c["player_a"], c["player_b"])
-                if start:
-                    async with get_db(db_path) as db:
+        from app.scraper.flashscore_results import scrape_all_match_starts, _fs_name_matches
+        all_starts = await scrape_all_match_starts()
+        async with get_db(db_path) as db:
+            for c in selected:
+                for fs in all_starts:
+                    if (_fs_name_matches(fs["player_a"], c["player_a"]) and _fs_name_matches(fs["player_b"], c["player_b"])) or \
+                       (_fs_name_matches(fs["player_a"], c["player_b"]) and _fs_name_matches(fs["player_b"], c["player_a"])):
                         await db.execute(
                             "UPDATE auto_matches SET match_start = ? WHERE event_ticker = ? AND trade_date = ?",
-                            (start, c["event_ticker"], today),
+                            (fs["start_time"], c["event_ticker"], today),
                         )
-                        await db.commit()
-                    logger.info(f"  Start time for {c['player_a']} vs {c['player_b']}: {start}")
-            except Exception:
-                pass
+                        logger.info(f"  Start: {c['player_a']} vs {c['player_b']} -> {fs['start_time']}")
+                        break
+            await db.commit()
     except Exception as e:
         logger.warning(f"FlashScore batch fetch failed: {e}")
 
@@ -428,8 +428,8 @@ async def _poll_and_trade(client, db_path):
                 )
                 await db.commit()
 
-            # Execute trade if signal is strong enough
-            if signal["contracts"] > 0 and minutes_played > 0:
+            # Execute trade only with confirmed start time and active match
+            if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start"):
                 # Check cooldown
                 async with get_db(db_path) as db:
                     last_trade = await db.execute(
