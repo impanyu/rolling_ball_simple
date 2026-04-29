@@ -255,14 +255,29 @@ async def _discover_matches(client, db_path):
             try:
                 new_start = await scrape_live_match_start(pa, pb, db_path)
                 if new_start and new_start != old_start:
+                    # If new start is in the future, revert to upcoming
+                    new_status = None
+                    try:
+                        new_start_dt = datetime.fromisoformat(new_start.replace("Z", "+00:00"))
+                        if new_start_dt > now_utc:
+                            new_status = "upcoming"
+                    except Exception:
+                        pass
+
                     async with get_db(db_path) as db:
-                        await db.execute(
-                            "UPDATE auto_matches SET match_start = ?, updated_at = ? WHERE event_ticker = ?",
-                            (new_start, now, evt),
-                        )
+                        if new_status:
+                            await db.execute(
+                                "UPDATE auto_matches SET match_start = ?, status = ?, updated_at = ? WHERE event_ticker = ?",
+                                (new_start, new_status, now, evt),
+                            )
+                        else:
+                            await db.execute(
+                                "UPDATE auto_matches SET match_start = ?, updated_at = ? WHERE event_ticker = ?",
+                                (new_start, now, evt),
+                            )
                         await db.commit()
                     updated += 1
-                    logger.info(f"  Updated start: {pa} vs {pb}: {old_start} -> {new_start}")
+                    logger.info(f"  Updated start: {pa} vs {pb}: {old_start} -> {new_start}{' (reverted to upcoming)' if new_status else ''}")
             except Exception:
                 pass
 
