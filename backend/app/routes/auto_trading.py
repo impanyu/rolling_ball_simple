@@ -613,13 +613,15 @@ async def _poll_and_trade(client, db_path):
             if len(history) > 500:
                 history = history[-500:]
 
-            # Resolve player names
+            # Resolve player names and get fresh rankings
             pa = await _resolve_player(db_path, m["player_a"])
             pb = await _resolve_player(db_path, m["player_b"])
+            rank_a = await _get_ranking(db_path, m["player_a"]) or m["rank_a"]
+            rank_b = await _get_ranking(db_path, m["player_b"]) or m["rank_b"]
 
-            # Compute signal
+            # Compute signal with fresh rankings
             signal = await _compute_signal(
-                db_path, pa, pb, m["rank_a"], m["rank_b"],
+                db_path, pa, pb, rank_a, rank_b,
                 cp, ip, rmin, rmax, minutes_played, recent_change,
             )
 
