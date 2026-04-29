@@ -120,11 +120,17 @@ async def _init_auto_tables(db_path):
 
 
 async def _discover_matches(client, db_path):
-    """Find qualifying matches: both ranked ≤ 500, sufficient volume."""
+    """Find qualifying matches starting within next 24h. Keep in_progress matches."""
     from datetime import timedelta
     cdt = timezone(timedelta(hours=-5))
     today = datetime.now(cdt).strftime("%Y-%m-%d")
-    now = datetime.now(timezone.utc).isoformat() + "Z"
+    now_utc = datetime.now(timezone.utc)
+    now = now_utc.isoformat() + "Z"
+
+    # Remove old upcoming matches (but keep in_progress and completed)
+    async with get_db(db_path) as db:
+        await db.execute("DELETE FROM auto_matches WHERE status = 'upcoming'")
+        await db.commit()
     candidates = []
 
     for series in TENNIS_SERIES:
@@ -180,47 +186,63 @@ async def _discover_matches(client, db_path):
     candidates.sort(key=lambda x: -x["priority"])
     selected = candidates[:MAX_DAILY_MATCHES]
 
-    async with get_db(db_path) as db:
-        for c in selected:
-            existing = await db.execute(
-                "SELECT 1 FROM auto_matches WHERE event_ticker = ? AND trade_date = ?",
-                (c["event_ticker"], today),
-            )
-            if await existing.fetchone():
-                continue
-            await db.execute(
-                """INSERT OR REPLACE INTO auto_matches
-                   (event_ticker, ticker_a, ticker_b, player_a, player_b, rank_a, rank_b,
-                    priority, status, current_price, trade_date, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'upcoming', ?, ?, ?, ?)""",
-                (c["event_ticker"], c["ticker_a"], c["ticker_b"],
-                 c["player_a"], c["player_b"], c["rank_a"], c["rank_b"],
-                 c["priority"], c["price_a"], today, now, now),
-            )
-        await db.commit()
+    logger.info(f"Auto-discover: {len(selected)} candidates (from {len(candidates)} total)")
 
-    logger.info(f"Auto-discover: {len(selected)} qualifying matches (from {len(candidates)} candidates)")
-
-    # Fetch start times from FlashScore for each selected match
+    # Fetch start times and only insert matches starting within 24h
+    added = 0
     try:
         from app.scraper.flashscore_results import scrape_live_match_start
+        from datetime import timedelta
+        cutoff = now_utc + timedelta(hours=24)
+
         for c in selected:
+            # Skip if already tracked (in_progress or completed)
+            async with get_db(db_path) as db:
+                existing = await db.execute(
+                    "SELECT 1 FROM auto_matches WHERE event_ticker = ?", (c["event_ticker"],),
+                )
+                if await existing.fetchone():
+                    continue
+
             try:
                 start = await scrape_live_match_start(c["player_a"], c["player_b"], db_path)
-                if start:
-                    async with get_db(db_path) as db:
-                        await db.execute(
-                            "UPDATE auto_matches SET match_start = ? WHERE event_ticker = ? AND trade_date = ?",
-                            (start, c["event_ticker"], today),
-                        )
-                        await db.commit()
-                    logger.info(f"  Start: {c['player_a']} vs {c['player_b']} -> {start}")
-                else:
-                    logger.info(f"  No start time: {c['player_a']} vs {c['player_b']}")
-            except Exception as e:
-                logger.debug(f"  FlashScore failed for {c['player_a']}: {e}")
+            except Exception:
+                start = None
+
+            if not start:
+                logger.debug(f"  Skip (no start time): {c['player_a']} vs {c['player_b']}")
+                continue
+
+            # Check if start time is within next 24 hours
+            try:
+                start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+                if start_dt > cutoff:
+                    logger.debug(f"  Skip (>24h away): {c['player_a']} vs {c['player_b']} at {start}")
+                    continue
+                if start_dt < now_utc - timedelta(hours=24):
+                    logger.debug(f"  Skip (old): {c['player_a']} vs {c['player_b']} at {start}")
+                    continue
+            except Exception:
+                continue
+
+            async with get_db(db_path) as db:
+                await db.execute(
+                    """INSERT OR REPLACE INTO auto_matches
+                       (event_ticker, ticker_a, ticker_b, player_a, player_b, rank_a, rank_b,
+                        priority, status, current_price, match_start, trade_date, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'upcoming', ?, ?, ?, ?, ?)""",
+                    (c["event_ticker"], c["ticker_a"], c["ticker_b"],
+                     c["player_a"], c["player_b"], c["rank_a"], c["rank_b"],
+                     c["priority"], c["price_a"], start, today, now, now),
+                )
+                await db.commit()
+            added += 1
+            logger.info(f"  Added: {c['player_a']} vs {c['player_b']} at {start}")
+
     except Exception as e:
         logger.warning(f"FlashScore fetch failed: {e}")
+
+    logger.info(f"Auto-discover complete: {added} matches added for today")
 
 
 async def _compute_signal(db_path, player_a, player_b, rank_a, rank_b, cp, ip, rmin, rmax, minutes_played, recent_change):
@@ -544,15 +566,12 @@ async def _auto_loop():
     client = _get_client()
     logger.info("Auto trading loop started")
 
-    # If no matches prepared yet today, discover now
-    from datetime import timedelta as td
-    cdt = timezone(td(hours=-5))
-    today_cdt = datetime.now(cdt).strftime("%Y-%m-%d")
+    # If no matches prepared, discover now
     async with get_db(db_path) as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM auto_matches WHERE trade_date = ?", (today_cdt,))
+        cursor = await db.execute("SELECT COUNT(*) FROM auto_matches WHERE status IN ('upcoming', 'in_progress')")
         count = (await cursor.fetchone())[0]
     if count == 0:
-        logger.info("No matches prepared for today, discovering now...")
+        logger.info("No matches prepared, discovering now...")
         await _discover_matches(client, db_path)
 
     last_discover = 0
@@ -726,13 +745,6 @@ async def auto_prepare_now():
         client = _get_client()
         db_path = app.config.settings.db_path
         await _init_auto_tables(db_path)
-        # Clear today's upcoming matches and re-discover
-        from datetime import timedelta
-        cdt = timezone(timedelta(hours=-5))
-        today_cdt = datetime.now(cdt).strftime("%Y-%m-%d")
-        async with get_db(db_path) as db:
-            await db.execute("DELETE FROM auto_matches WHERE trade_date = ? AND status = 'upcoming'", (today_cdt,))
-            await db.commit()
         await _discover_matches(client, db_path)
     asyncio.create_task(_do())
     return {"status": "preparing in background"}
