@@ -154,6 +154,9 @@ async def _discover_matches(client, db_path):
                 continue
 
             volume = float(event_markets[0].get("volume", event_markets[0].get("volume_fp", 0)))
+            if volume < 50:
+                continue
+
             price_a = round(float(event_markets[0].get("last_price_dollars", 0)) * 100)
 
             # Priority: lower combined rank + higher volume = better
@@ -195,6 +198,25 @@ async def _discover_matches(client, db_path):
         await db.commit()
 
     logger.info(f"Auto-discover: {len(selected)} qualifying matches (from {len(candidates)} candidates)")
+
+    # Batch fetch start times from FlashScore
+    try:
+        from app.scraper.flashscore_results import scrape_live_match_start
+        for c in selected:
+            try:
+                start = await scrape_live_match_start(c["player_a"], c["player_b"])
+                if start:
+                    async with get_db(db_path) as db:
+                        await db.execute(
+                            "UPDATE auto_matches SET match_start = ? WHERE event_ticker = ? AND trade_date = ?",
+                            (start, c["event_ticker"], today),
+                        )
+                        await db.commit()
+                    logger.info(f"  Start time for {c['player_a']} vs {c['player_b']}: {start}")
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"FlashScore batch fetch failed: {e}")
 
 
 async def _compute_signal(db_path, player_a, player_b, rank_a, rank_b, cp, ip, rmin, rmax, minutes_played, recent_change):
