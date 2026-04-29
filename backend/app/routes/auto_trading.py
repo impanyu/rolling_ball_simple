@@ -245,7 +245,7 @@ async def _discover_matches(client, db_path):
     try:
         async with get_db(db_path) as db:
             cursor = await db.execute(
-                "SELECT event_ticker, player_a, player_b, match_start FROM auto_matches WHERE status = 'upcoming'"
+                "SELECT event_ticker, player_a, player_b, match_start FROM auto_matches WHERE status IN ('upcoming', 'in_progress')"
             )
             upcoming = await cursor.fetchall()
 
