@@ -408,6 +408,8 @@ async def _poll_and_trade(client, db_path):
         )
         matches = [dict(r) for r in await cursor.fetchall()]
 
+    logger.info(f"Polling {len(matches)} matches")
+
     # Check pending orders — update if filled, cancel if >2min old
     async with get_db(db_path) as db:
         pending_orders = await db.execute(
@@ -788,6 +790,7 @@ async def _auto_loop():
                     pass
 
             await _poll_and_trade(client, db_path)
+            logger.info("Poll cycle complete")
 
         except asyncio.CancelledError:
             logger.info("Auto trading loop cancelled")
