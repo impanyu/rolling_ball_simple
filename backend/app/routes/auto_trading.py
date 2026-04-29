@@ -239,7 +239,37 @@ async def _discover_matches(client, db_path):
     except Exception as e:
         logger.warning(f"FlashScore fetch failed: {e}")
 
-    logger.info(f"Auto-discover complete: {added} matches added for today")
+    logger.info(f"Auto-discover complete: {added} new matches added")
+
+    # Refresh start times for existing upcoming matches (times may have changed)
+    try:
+        async with get_db(db_path) as db:
+            cursor = await db.execute(
+                "SELECT event_ticker, player_a, player_b, match_start FROM auto_matches WHERE status = 'upcoming'"
+            )
+            upcoming = await cursor.fetchall()
+
+        updated = 0
+        for row in upcoming:
+            evt, pa, pb, old_start = row
+            try:
+                new_start = await scrape_live_match_start(pa, pb, db_path)
+                if new_start and new_start != old_start:
+                    async with get_db(db_path) as db:
+                        await db.execute(
+                            "UPDATE auto_matches SET match_start = ?, updated_at = ? WHERE event_ticker = ?",
+                            (new_start, now, evt),
+                        )
+                        await db.commit()
+                    updated += 1
+                    logger.info(f"  Updated start: {pa} vs {pb}: {old_start} -> {new_start}")
+            except Exception:
+                pass
+
+        if updated:
+            logger.info(f"Refreshed {updated} match start times")
+    except Exception as e:
+        logger.warning(f"Start time refresh failed: {e}")
 
 
 async def _compute_signal(db_path, player_a, player_b, rank_a, rank_b, cp, ip, rmin, rmax, minutes_played, recent_change):
