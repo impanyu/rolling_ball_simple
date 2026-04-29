@@ -13,6 +13,7 @@ from app.routes.query import router as query_router
 from app.routes.simulate import router as simulate_router
 from app.routes.trading import router as trading_router
 from app.routes.live_signal import router as live_signal_router
+from app.routes.auto_trading import router as auto_trading_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,6 +181,7 @@ app.include_router(query_router)
 app.include_router(simulate_router)
 app.include_router(trading_router)
 app.include_router(live_signal_router)
+app.include_router(auto_trading_router)
 
 
 @app.middleware("http")

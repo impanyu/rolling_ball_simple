@@ -4,7 +4,7 @@ import NavBar from "./components/NavBar";
 import QueryForm from "./components/QueryForm";
 import Histogram from "./components/Histogram";
 import SimulatorPage from "./pages/SimulatorPage";
-import { fetchQueryResults, fetchGridSearch, fetchPlayerWinRates, refreshWinRates, fetchActiveMatches, monitorStart, monitorStop, fetchMonitorStatus, fetchComebackAnalysis, fetchCloseoutAnalysis, fetchMatchSignal, fetchPathQuery, fetchLiveSignal, fetchLiveMatches, pollLiveMatch, backfillLiveMatch } from "./api";
+import { fetchQueryResults, fetchGridSearch, fetchPlayerWinRates, refreshWinRates, fetchActiveMatches, monitorStart, monitorStop, fetchMonitorStatus, fetchComebackAnalysis, fetchCloseoutAnalysis, fetchMatchSignal, fetchPathQuery, fetchLiveSignal, fetchLiveMatches, pollLiveMatch, backfillLiveMatch, autoTradingStart, autoTradingStop, autoTradingStatus, autoTradingBalance, autoTradingMatchDetail, autoTradingDiscover } from "./api";
 import type { GridSearchResult, PlayerWinRate } from "./api";
 import type { QueryFilters, QueryResponse } from "./types";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -1089,6 +1089,223 @@ function TradingPage() {
     );
 }
 
+function AutoTradingPage() {
+    const [running, setRunning] = useState(false);
+    const [matches, setMatches] = useState<any[]>([]);
+    const [trades, setTrades] = useState<any[]>([]);
+    const [summary, setSummary] = useState<any>({});
+    const [balance, setBalance] = useState<number | null>(null);
+    const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
+    const [matchDetail, setMatchDetail] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const loadStatus = async () => {
+        try {
+            const data = await autoTradingStatus();
+            setRunning(data.running);
+            setMatches(data.matches || []);
+            setTrades(data.trades || []);
+            setSummary(data.summary || {});
+        } catch {}
+    };
+
+    const loadBalance = async () => {
+        try {
+            const data = await autoTradingBalance();
+            if (data.balance != null) setBalance(data.balance);
+        } catch {}
+    };
+
+    useEffect(() => {
+        loadStatus();
+        loadBalance();
+        intervalRef.current = setInterval(() => { loadStatus(); loadBalance(); }, 15000);
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, []);
+
+    const handleToggle = async () => {
+        setLoading(true);
+        if (running) {
+            await autoTradingStop();
+        } else {
+            await autoTradingStart();
+        }
+        await loadStatus();
+        setLoading(false);
+    };
+
+    const handleDiscover = async () => {
+        setLoading(true);
+        await autoTradingDiscover();
+        await loadStatus();
+        setLoading(false);
+    };
+
+    const openMatch = async (eventTicker: string) => {
+        setSelectedMatch(eventTicker);
+        try {
+            const data = await autoTradingMatchDetail(eventTicker);
+            setMatchDetail(data);
+        } catch {}
+    };
+
+    const statusColor = (s: string) => s === "active" ? "#27ae60" : s === "upcoming" ? "#3498db" : "#888";
+    const sigColor = (s: string) => s === "STRONG" ? "#27ae60" : s === "MODERATE" ? "#e67e22" : s === "WEAK" ? "#888" : "#ccc";
+
+    if (selectedMatch && matchDetail) {
+        const m = matchDetail.match;
+        const history = matchDetail.history || [];
+        return (
+            <div style={{ padding: 20 }}>
+                <button onClick={() => { setSelectedMatch(null); setMatchDetail(null); }} style={{ marginBottom: 12, cursor: "pointer" }}>Back to List</button>
+                <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 20 }}>
+                    <h3 style={{ margin: 0 }}>{m?.player_a} (#{m?.rank_a}) vs {m?.player_b} (#{m?.rank_b})</h3>
+                    <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                        Status: <strong style={{ color: statusColor(m?.status) }}>{m?.status}</strong>
+                        {m?.match_start && <> | Started: {new Date(m.match_start).toLocaleString()}</>}
+                        | Price: <strong>{m?.current_price}</strong>
+                    </div>
+                    {m?.last_rec && (
+                        <div style={{ fontSize: 20, fontWeight: 700, color: sigColor(m?.last_rec?.split(" ")[0] || ""), marginTop: 8 }}>
+                            {m.last_rec}
+                        </div>
+                    )}
+                    {history.length > 1 && (
+                        <div style={{ marginTop: 16 }}>
+                            <ResponsiveContainer width="100%" height={200}>
+                                <LineChart data={history}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="t" fontSize={10} interval="preserveStartEnd" />
+                                    <YAxis domain={[0, 100]} fontSize={10} />
+                                    <Tooltip />
+                                    <Line type="monotone" dataKey="cp" stroke="#3498db" dot={false} strokeWidth={2} name="Price A" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+                    {matchDetail.trades?.length > 0 && (
+                        <div style={{ marginTop: 16 }}>
+                            <h4>Trades for this match</h4>
+                            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                                <thead><tr style={{ borderBottom: "2px solid #ddd" }}>
+                                    <th style={{ padding: 4 }}>Time</th><th>Player</th><th>Side</th><th>Price</th><th>Qty</th><th>Diff</th><th>Status</th>
+                                </tr></thead>
+                                <tbody>
+                                    {matchDetail.trades.map((t: any, i: number) => (
+                                        <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                                            <td style={{ padding: 4 }}>{t.created_at ? new Date(t.created_at).toLocaleTimeString() : ""}</td>
+                                            <td style={{ padding: 4 }}>{t.player}</td>
+                                            <td style={{ padding: 4 }}>{t.side}</td>
+                                            <td style={{ padding: 4 }}>{t.price}c</td>
+                                            <td style={{ padding: 4 }}>x{t.contracts}</td>
+                                            <td style={{ padding: 4 }}>{t.score_diff}</td>
+                                            <td style={{ padding: 4 }}>{t.status}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ padding: 20 }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div>
+                    <span style={{ fontSize: 14 }}>
+                        Balance: <strong>${balance != null ? balance.toFixed(2) : "..."}</strong>
+                        {" | "}Active: <strong>{summary.active || 0}</strong>
+                        {" | "}Upcoming: <strong>{summary.upcoming || 0}</strong>
+                        {" | "}Trades: <strong>{summary.total_trades || 0}</strong>
+                    </span>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={handleDiscover} disabled={loading}
+                        style={{ padding: "6px 14px", cursor: "pointer", fontSize: 12 }}>
+                        Discover
+                    </button>
+                    <button onClick={handleToggle} disabled={loading}
+                        style={{ padding: "6px 20px", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                                 background: running ? "#e74c3c" : "#27ae60", color: "white", border: "none", borderRadius: 4 }}>
+                        {loading ? "..." : running ? "Stop Auto Trading" : "Start Auto Trading"}
+                    </button>
+                </div>
+            </div>
+
+            {/* Match List */}
+            <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <h4 style={{ marginTop: 0 }}>Today's Matches ({matches.length})</h4>
+                {matches.length === 0 && <div style={{ color: "#888", fontSize: 13 }}>No matches. Click Discover to find matches.</div>}
+                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                    <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
+                        <th style={{ padding: 4 }}>Status</th>
+                        <th style={{ padding: 4 }}>Match</th>
+                        <th style={{ padding: 4 }}>Ranks</th>
+                        <th style={{ padding: 4 }}>Price</th>
+                        <th style={{ padding: 4 }}>Signal</th>
+                        <th style={{ padding: 4 }}></th>
+                    </tr></thead>
+                    <tbody>
+                        {matches.map((m, i) => (
+                            <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                                <td style={{ padding: 4 }}>
+                                    <span style={{ color: statusColor(m.status), fontWeight: 600 }}>{m.status}</span>
+                                </td>
+                                <td style={{ padding: 4 }}>{m.player_a} vs {m.player_b}</td>
+                                <td style={{ padding: 4 }}>#{m.rank_a} vs #{m.rank_b}</td>
+                                <td style={{ padding: 4 }}>{m.current_price || "-"}</td>
+                                <td style={{ padding: 4, color: sigColor(m.last_rec?.split(" ")[0] || ""), fontWeight: 600, fontSize: 11 }}>
+                                    {m.last_rec || "-"}
+                                </td>
+                                <td style={{ padding: 4 }}>
+                                    <button onClick={() => openMatch(m.event_ticker)}
+                                        style={{ padding: "2px 8px", cursor: "pointer", fontSize: 11 }}>
+                                        Details
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Trade History */}
+            {trades.length > 0 && (
+                <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
+                    <h4 style={{ marginTop: 0 }}>Trade History</h4>
+                    <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+                        <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
+                            <th style={{ padding: 3 }}>Time</th><th style={{ padding: 3 }}>Player</th>
+                            <th style={{ padding: 3 }}>Side</th><th style={{ padding: 3 }}>Price</th>
+                            <th style={{ padding: 3 }}>Qty</th><th style={{ padding: 3 }}>Diff</th>
+                            <th style={{ padding: 3 }}>Status</th><th style={{ padding: 3 }}>P&L</th>
+                        </tr></thead>
+                        <tbody>
+                            {trades.map((t, i) => (
+                                <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                                    <td style={{ padding: 3 }}>{t.created_at ? new Date(t.created_at).toLocaleString() : ""}</td>
+                                    <td style={{ padding: 3 }}>{t.player}</td>
+                                    <td style={{ padding: 3 }}>{t.side}</td>
+                                    <td style={{ padding: 3 }}>{t.price}c</td>
+                                    <td style={{ padding: 3 }}>x{t.contracts}</td>
+                                    <td style={{ padding: 3 }}>{t.score_diff}</td>
+                                    <td style={{ padding: 3, color: t.status === "placed" ? "#3498db" : t.won ? "#27ae60" : "#e74c3c" }}>{t.status}</td>
+                                    <td style={{ padding: 3, fontWeight: 600 }}>{t.pnl != null ? `$${(t.pnl/100).toFixed(2)}` : "-"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function AppContent() {
     const location = useLocation();
     const currentPath = location.pathname;
@@ -1108,6 +1325,9 @@ function AppContent() {
             </div>
             <div style={{ display: currentPath === "/live" ? "block" : "none" }}>
                 <LiveSignalPage />
+            </div>
+            <div style={{ display: currentPath === "/auto" ? "block" : "none" }}>
+                <AutoTradingPage />
             </div>
         </div>
     );

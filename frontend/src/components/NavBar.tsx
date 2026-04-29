@@ -17,6 +17,7 @@ export default function NavBar() {
             <Link to="/comeback" style={linkStyle("/comeback")}>Comeback</Link>
             <Link to="/closeout" style={linkStyle("/closeout")}>Closeout</Link>
             <Link to="/live" style={linkStyle("/live")}>Live Signal</Link>
+            <Link to="/auto" style={linkStyle("/auto")}>Auto Trading</Link>
         </nav>
     );
 }

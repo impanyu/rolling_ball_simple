@@ -239,3 +239,29 @@ export async function fetchMatchUpdate(
     if (!resp.ok) throw new Error(`Update failed: ${resp.status}`);
     return resp.json();
 }
+
+// Auto Trading
+export async function autoTradingStart(): Promise<{ status: string }> {
+    const resp = await fetch("/api/auto-trading/start", { method: "POST" });
+    return resp.json();
+}
+export async function autoTradingStop(): Promise<{ status: string }> {
+    const resp = await fetch("/api/auto-trading/stop", { method: "POST" });
+    return resp.json();
+}
+export async function autoTradingStatus(): Promise<any> {
+    const resp = await fetch("/api/auto-trading/status");
+    return resp.json();
+}
+export async function autoTradingBalance(): Promise<any> {
+    const resp = await fetch("/api/auto-trading/balance");
+    return resp.json();
+}
+export async function autoTradingMatchDetail(eventTicker: string): Promise<any> {
+    const resp = await fetch(`/api/auto-trading/match/${encodeURIComponent(eventTicker)}`);
+    return resp.json();
+}
+export async function autoTradingDiscover(): Promise<any> {
+    const resp = await fetch("/api/auto-trading/discover", { method: "POST" });
+    return resp.json();
+}
