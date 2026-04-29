@@ -382,6 +382,39 @@ async def _poll_and_trade(client, db_path):
         )
         matches = [dict(r) for r in await cursor.fetchall()]
 
+    # Also settle any unsettled trades from completed matches
+    async with get_db(db_path) as db:
+        unsettled = await db.execute(
+            "SELECT DISTINCT event_ticker FROM auto_trades WHERE status = 'placed'"
+        )
+        unsettled_events = [r[0] for r in await unsettled.fetchall()]
+    for evt in unsettled_events:
+        try:
+            async with get_db(db_path) as db:
+                pending = await db.execute(
+                    "SELECT id, ticker, side, price, contracts FROM auto_trades WHERE event_ticker = ? AND status = 'placed'",
+                    (evt,),
+                )
+                for trade in await pending.fetchall():
+                    try:
+                        mk = await client.get_market(trade[1])
+                        mkt = mk.get("market", mk)
+                        result = mkt.get("result", "")
+                        if result in ("yes", "no"):
+                            won = 1 if result == trade[2] else 0
+                            bp = trade[3]
+                            contracts = trade[4]
+                            pnl = ((100 - bp - 2) * contracts) if won else (-(bp + 2) * contracts)
+                            await db.execute(
+                                "UPDATE auto_trades SET status = 'settled', won = ?, pnl = ? WHERE id = ?",
+                                (won, pnl, trade[0]),
+                            )
+                    except Exception:
+                        pass
+                await db.commit()
+        except Exception:
+            pass
+
     for m in matches:
         try:
             # Skip matches without FlashScore-confirmed start time
@@ -395,23 +428,6 @@ async def _poll_and_trade(client, db_path):
                     continue
             except Exception:
                 continue
-
-            # Skip matches in cooldown (no point polling)
-            async with get_db(db_path) as db:
-                last_trade_q = await db.execute(
-                    "SELECT created_at FROM auto_trades WHERE event_ticker = ? ORDER BY created_at DESC LIMIT 1",
-                    (m["event_ticker"],),
-                )
-                lt_row = await last_trade_q.fetchone()
-            if lt_row and lt_row[0]:
-                try:
-                    ts = lt_row[0].replace("+00:00Z", "Z").replace("Z", "+00:00")
-                    last_t = datetime.fromisoformat(ts)
-                    if (now - last_t).total_seconds() < COOLDOWN_MINUTES * 60:
-                        continue
-                except Exception as e:
-                    logger.warning(f"Cooldown parse error for {m['event_ticker']}: {lt_row[0]} -> {e}")
-
 
             market_data = await client.get_market(m["ticker_a"])
             market = market_data.get("market", market_data)
@@ -430,12 +446,13 @@ async def _poll_and_trade(client, db_path):
                         (m["event_ticker"],),
                     )
                     for trade in await pending.fetchall():
+                        # trade: (id, ticker, side, price, contracts)
                         try:
                             mk = await client.get_market(trade[1])
                             result = mk.get("market", mk).get("result", "")
                             if result in ("yes", "no"):
-                                won = 1 if result == trade[3] else 0  # side matches result
-                                bp = trade[3]  # price
+                                won = 1 if result == trade[2] else 0
+                                bp = trade[3]
                                 contracts = trade[4]
                                 pnl = ((100 - bp - 2) * contracts) if won else (-(bp + 2) * contracts)
                                 await db.execute(
@@ -549,8 +566,24 @@ async def _poll_and_trade(client, db_path):
                 )
                 await db.commit()
 
-            # Execute trade only with confirmed start time and active match
-            if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start"):
+            # Execute trade only with confirmed start time and active match + cooldown check
+            in_cooldown = False
+            async with get_db(db_path) as db:
+                lt_q = await db.execute(
+                    "SELECT created_at FROM auto_trades WHERE event_ticker = ? ORDER BY created_at DESC LIMIT 1",
+                    (m["event_ticker"],),
+                )
+                lt_row = await lt_q.fetchone()
+            if lt_row and lt_row[0]:
+                try:
+                    ts = lt_row[0].replace("+00:00Z", "Z").replace("Z", "+00:00")
+                    last_t = datetime.fromisoformat(ts)
+                    if (now - last_t).total_seconds() < COOLDOWN_MINUTES * 60:
+                        in_cooldown = True
+                except Exception:
+                    pass
+
+            if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start") and not in_cooldown:
                 # Place order: each "unit" = 10 contracts
                 ticker = m["ticker_a"] if signal["buy_ticker_idx"] == 0 else m["ticker_b"]
                 try:
