@@ -485,11 +485,12 @@ async def _poll_and_trade(client, db_path):
 
             # Execute trade only with confirmed start time and active match
             if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start"):
-                # Place order
+                # Place order: each "unit" = $10, contracts = $10 / price per contract
                 ticker = m["ticker_a"] if signal["buy_ticker_idx"] == 0 else m["ticker_b"]
                 try:
-                    count = signal["contracts"]
                     price_cents = signal["buy_price"]
+                    contracts_per_unit = max(1, round(DOLLARS_PER_UNIT * 100 / price_cents)) if price_cents > 0 else 1
+                    count = signal["contracts"] * contracts_per_unit
                     result = await client.place_order(
                         ticker=ticker,
                         side=signal["buy_side"],
