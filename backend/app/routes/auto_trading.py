@@ -712,11 +712,20 @@ async def auto_status():
     await _init_auto_tables(db_path)
 
     async with get_db(db_path) as db:
+        # Active matches: today only
         cursor = await db.execute(
-            "SELECT * FROM auto_matches WHERE trade_date = ? ORDER BY priority DESC",
+            "SELECT * FROM auto_matches WHERE trade_date = ? AND status IN ('upcoming', 'in_progress') ORDER BY priority DESC",
             (today,),
         )
-        matches = [dict(r) for r in await cursor.fetchall()]
+        active_matches = [dict(r) for r in await cursor.fetchall()]
+
+        # Completed matches: all time (for history)
+        cursor2_c = await db.execute(
+            "SELECT * FROM auto_matches WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 100",
+        )
+        completed_matches = [dict(r) for r in await cursor2_c.fetchall()]
+
+        matches = active_matches + completed_matches
 
         cursor2 = await db.execute(
             "SELECT * FROM auto_trades ORDER BY created_at DESC LIMIT 50",
