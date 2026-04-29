@@ -127,10 +127,7 @@ async def _discover_matches(client, db_path):
     now_utc = datetime.now(timezone.utc)
     now = now_utc.isoformat() + "Z"
 
-    # Remove old upcoming matches (but keep in_progress and completed)
-    async with get_db(db_path) as db:
-        await db.execute("DELETE FROM auto_matches WHERE status = 'upcoming'")
-        await db.commit()
+    # Don't delete anything — only add new matches. Completed matches are handled by polling.
     candidates = []
 
     for series in TENNIS_SERIES:
