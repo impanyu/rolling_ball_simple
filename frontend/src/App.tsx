@@ -1494,7 +1494,7 @@ function AutoTradingPage() {
                                 </td>
                                 <td style={{ padding: 4 }}>{m.player_a} vs {m.player_b}</td>
                                 <td style={{ padding: 4 }}>#{m.rank_a} vs #{m.rank_b}</td>
-                                <td style={{ padding: 4, fontSize: 11 }}>{m.match_start ? new Date(m.match_start).toLocaleTimeString() : <span style={{ color: "#e74c3c" }}>unknown</span>}</td>
+                                <td style={{ padding: 4, fontSize: 11 }}>{m.match_start ? new Date(m.match_start).toLocaleString() : <span style={{ color: "#e74c3c" }}>unknown</span>}</td>
                                 <td style={{ padding: 4 }}>{m.current_price || "-"}</td>
                                 <td style={{ padding: 4, color: sigColor(m.last_rec?.split(" ")[0] || ""), fontWeight: 600, fontSize: 11 }}>
                                     {m.last_rec || "-"}
