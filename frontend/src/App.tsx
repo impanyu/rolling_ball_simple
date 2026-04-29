@@ -1097,20 +1097,8 @@ function AppContent() {
         <div style={{ maxWidth: 900, margin: "0 auto", padding: 20, fontFamily: "system-ui" }}>
             <h1>Tennis Odds Tool</h1>
             <NavBar />
-            <div style={{ display: currentPath === "/" ? "block" : "none" }}>
-                <QueryPage />
-            </div>
-            <div style={{ display: currentPath === "/simulate" ? "block" : "none" }}>
-                <SimulatorPage />
-            </div>
-            <div style={{ display: currentPath === "/winrates" ? "block" : "none" }}>
+            <div style={{ display: currentPath === "/winrates" || currentPath === "/" ? "block" : "none" }}>
                 <WinRatesPage />
-            </div>
-            <div style={{ display: currentPath === "/path-query" ? "block" : "none" }}>
-                <PathQueryPage />
-            </div>
-            <div style={{ display: currentPath === "/signal" ? "block" : "none" }}>
-                <SignalPage />
             </div>
             <div style={{ display: currentPath === "/comeback" ? "block" : "none" }}>
                 <ComebackPage />
@@ -1120,9 +1108,6 @@ function AppContent() {
             </div>
             <div style={{ display: currentPath === "/live" ? "block" : "none" }}>
                 <LiveSignalPage />
-            </div>
-            <div style={{ display: currentPath === "/trading" ? "block" : "none" }}>
-                <TradingPage />
             </div>
         </div>
     );
