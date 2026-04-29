@@ -52,6 +52,26 @@ async def scheduled_fetch():
         logger.error(f"Rule regeneration failed: {e}")
 
 
+async def prepare_daily_matches():
+    """Daily job at 5 AM: discover matches, fetch FlashScore start times."""
+    logger.info("Preparing daily match list...")
+    try:
+        from app.kalshi.auth import KalshiAuth
+        from app.kalshi.client import KalshiClient
+        from app.routes.auto_trading import _discover_matches, _init_auto_tables, _retry_unknown_starts
+
+        s = _get_settings()
+        auth = KalshiAuth(s.kalshi_api_key_id, s.kalshi_private_key_path)
+        client = KalshiClient("https://api.elections.kalshi.com/trade-api/v2", auth)
+        await _init_auto_tables(s.db_path)
+        await _discover_matches(client, s.db_path)
+        await _retry_unknown_starts(s.db_path)
+        await client.close()
+        logger.info("Daily match prep complete.")
+    except Exception as e:
+        logger.error(f"Daily match prep failed: {e}")
+
+
 async def regenerate_rules():
     """Regenerate all player + global rules from current data."""
     import sqlite3
@@ -150,11 +170,18 @@ async def lifespan(fastapi_app: FastAPI):
             minute=s.fetch_cron_minute,
             id="daily_fetch",
         )
+        scheduler.add_job(
+            prepare_daily_matches,
+            "cron",
+            hour=5,
+            minute=0,
+            id="daily_match_prep",
+        )
 
     scheduler.start()
     if s.kalshi_api_key_id:
         logger.info(
-            f"Scheduler started: Kalshi fetch at {s.fetch_cron_hour:02d}:{s.fetch_cron_minute:02d}, winrates at 04:00"
+            f"Scheduler started: Kalshi fetch at {s.fetch_cron_hour:02d}:{s.fetch_cron_minute:02d}, winrates at 04:00, match prep at 05:00"
         )
     else:
         logger.info("Scheduler started: winrates at 04:00 (no Kalshi API key)")

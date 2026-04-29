@@ -4,7 +4,7 @@ import NavBar from "./components/NavBar";
 import QueryForm from "./components/QueryForm";
 import Histogram from "./components/Histogram";
 import SimulatorPage from "./pages/SimulatorPage";
-import { fetchQueryResults, fetchGridSearch, fetchPlayerWinRates, refreshWinRates, fetchActiveMatches, monitorStart, monitorStop, fetchMonitorStatus, fetchComebackAnalysis, fetchCloseoutAnalysis, fetchMatchSignal, fetchPathQuery, fetchLiveSignal, fetchLiveMatches, pollLiveMatch, backfillLiveMatch, autoTradingStart, autoTradingStop, autoTradingStatus, autoTradingBalance, autoTradingMatchDetail, autoTradingDiscover } from "./api";
+import { fetchQueryResults, fetchGridSearch, fetchPlayerWinRates, refreshWinRates, fetchActiveMatches, monitorStart, monitorStop, fetchMonitorStatus, fetchComebackAnalysis, fetchCloseoutAnalysis, fetchMatchSignal, fetchPathQuery, fetchLiveSignal, fetchLiveMatches, pollLiveMatch, backfillLiveMatch, autoTradingStart, autoTradingStop, autoTradingStatus, autoTradingBalance, autoTradingMatchDetail, autoTradingPrepare } from "./api";
 import type { GridSearchResult, PlayerWinRate } from "./api";
 import type { QueryFilters, QueryResponse } from "./types";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -1428,11 +1428,17 @@ function AutoTradingPage() {
                         {" | "}Trades: <strong>{summary.total_trades || 0}</strong>
                     </span>
                 </div>
-                <button onClick={handleToggle} disabled={loading}
-                    style={{ padding: "6px 20px", cursor: "pointer", fontSize: 13, fontWeight: 600,
-                             background: running ? "#e74c3c" : "#27ae60", color: "white", border: "none", borderRadius: 4 }}>
-                    {loading ? "..." : running ? "Stop Auto Trading" : "Start Auto Trading"}
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={async () => { setLoading(true); await autoTradingPrepare(); setLoading(false); }} disabled={loading}
+                        style={{ padding: "6px 14px", cursor: "pointer", fontSize: 12, border: "1px solid #ddd", borderRadius: 4 }}>
+                        {loading ? "..." : "Prepare Matches"}
+                    </button>
+                    <button onClick={handleToggle} disabled={loading}
+                        style={{ padding: "6px 20px", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                                 background: running ? "#e74c3c" : "#27ae60", color: "white", border: "none", borderRadius: 4 }}>
+                        {loading ? "..." : running ? "Stop Auto Trading" : "Start Auto Trading"}
+                    </button>
+                </div>
             </div>
 
             {/* Balance Chart */}

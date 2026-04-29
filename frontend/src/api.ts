@@ -261,7 +261,7 @@ export async function autoTradingMatchDetail(eventTicker: string): Promise<any> 
     const resp = await fetch(`/api/auto-trading/match/${encodeURIComponent(eventTicker)}`);
     return resp.json();
 }
-export async function autoTradingDiscover(): Promise<any> {
-    const resp = await fetch("/api/auto-trading/discover", { method: "POST" });
+export async function autoTradingPrepare(): Promise<any> {
+    const resp = await fetch("/api/auto-trading/prepare", { method: "POST" });
     return resp.json();
 }

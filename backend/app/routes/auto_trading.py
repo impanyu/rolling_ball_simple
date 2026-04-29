@@ -544,14 +544,16 @@ async def _auto_loop():
     client = _get_client()
     logger.info("Auto trading loop started")
 
-    # Clear and re-discover on start
+    # If no matches prepared yet today, discover now
     from datetime import timedelta as td
     cdt = timezone(td(hours=-5))
     today_cdt = datetime.now(cdt).strftime("%Y-%m-%d")
     async with get_db(db_path) as db:
-        await db.execute("DELETE FROM auto_matches WHERE trade_date = ? AND status = 'upcoming'", (today_cdt,))
-        await db.commit()
-    await _discover_matches(client, db_path)
+        cursor = await db.execute("SELECT COUNT(*) FROM auto_matches WHERE trade_date = ?", (today_cdt,))
+        count = (await cursor.fetchone())[0]
+    if count == 0:
+        logger.info("No matches prepared for today, discovering now...")
+        await _discover_matches(client, db_path)
 
     last_discover = 0
     last_balance_record = -600  # Record immediately on start
@@ -716,11 +718,21 @@ async def auto_balance():
     return {"balance": balance, "history": list(reversed(history))}
 
 
-@router.post("/api/auto-trading/discover")
-async def auto_discover_now():
-    """Manually trigger match discovery."""
-    client = _get_client()
-    db_path = app.config.settings.db_path
-    await _init_auto_tables(db_path)
-    await _discover_matches(client, db_path)
-    return {"status": "done"}
+@router.post("/api/auto-trading/prepare")
+async def auto_prepare_now():
+    """Manually trigger match discovery + start time fetch."""
+    import asyncio
+    async def _do():
+        client = _get_client()
+        db_path = app.config.settings.db_path
+        await _init_auto_tables(db_path)
+        # Clear today's upcoming matches and re-discover
+        from datetime import timedelta
+        cdt = timezone(timedelta(hours=-5))
+        today_cdt = datetime.now(cdt).strftime("%Y-%m-%d")
+        async with get_db(db_path) as db:
+            await db.execute("DELETE FROM auto_matches WHERE trade_date = ? AND status = 'upcoming'", (today_cdt,))
+            await db.commit()
+        await _discover_matches(client, db_path)
+    asyncio.create_task(_do())
+    return {"status": "preparing in background"}
