@@ -86,6 +86,11 @@ async def _resolve_player(db_path, name):
 
 async def _init_auto_tables(db_path):
     async with get_db(db_path) as db:
+        await db.execute("""CREATE TABLE IF NOT EXISTS balance_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            balance REAL,
+            recorded_at TEXT
+        )""")
         await db.execute("""CREATE TABLE IF NOT EXISTS auto_matches (
             event_ticker TEXT PRIMARY KEY,
             ticker_a TEXT, ticker_b TEXT,
@@ -292,11 +297,32 @@ async def _poll_and_trade(client, db_path):
             status = market.get("status", "")
 
             if status not in ("open", "active", "trading"):
+                # Match ended — check trade results
                 async with get_db(db_path) as db:
                     await db.execute(
                         "UPDATE auto_matches SET status = 'completed', updated_at = ? WHERE event_ticker = ? AND trade_date = ?",
                         (now_str, m["event_ticker"], today),
                     )
+                    # Update trade results
+                    pending = await db.execute(
+                        "SELECT id, ticker, side, price, contracts FROM auto_trades WHERE event_ticker = ? AND status = 'placed'",
+                        (m["event_ticker"],),
+                    )
+                    for trade in await pending.fetchall():
+                        try:
+                            mk = await client.get_market(trade[1])
+                            result = mk.get("market", mk).get("result", "")
+                            if result in ("yes", "no"):
+                                won = 1 if result == trade[3] else 0  # side matches result
+                                bp = trade[3]  # price
+                                contracts = trade[4]
+                                pnl = ((100 - bp - 2) * contracts) if won else (-(bp + 2) * contracts)
+                                await db.execute(
+                                    "UPDATE auto_trades SET status = 'settled', won = ?, pnl = ? WHERE id = ?",
+                                    (won, pnl, trade[0]),
+                                )
+                        except Exception:
+                            pass
                     await db.commit()
                 continue
 
@@ -441,6 +467,7 @@ async def _auto_loop():
     logger.info("Auto trading loop started")
 
     last_discover = 0
+    last_balance_record = 0
     while True:
         try:
             now_ts = datetime.now(timezone.utc).timestamp()
@@ -448,6 +475,23 @@ async def _auto_loop():
             if now_ts - last_discover >= DISCOVER_INTERVAL:
                 await _discover_matches(client, db_path)
                 last_discover = now_ts
+
+            # Record balance every 10 minutes
+            if now_ts - last_balance_record >= 600:
+                try:
+                    bal_data = await client.get_balance()
+                    bal = bal_data.get("balance", 0)
+                    if isinstance(bal, (int, float)) and bal > 1:
+                        bal = bal / 100
+                    async with get_db(db_path) as db:
+                        await db.execute(
+                            "INSERT INTO balance_history (balance, recorded_at) VALUES (?, ?)",
+                            (bal, datetime.now(timezone.utc).isoformat() + "Z"),
+                        )
+                        await db.commit()
+                    last_balance_record = now_ts
+                except Exception:
+                    pass
 
             await _poll_and_trade(client, db_path)
 
@@ -554,14 +598,29 @@ async def auto_match_detail(event_ticker: str):
 
 @router.get("/api/auto-trading/balance")
 async def auto_balance():
-    """Get Kalshi account balance."""
+    """Get Kalshi account balance + history."""
     client = _get_client()
+    db_path = app.config.settings.db_path
+    balance = None
     try:
         data = await client.get_balance()
-        balance = data.get("balance", 0)
-        return {"balance": round(balance / 100, 2) if isinstance(balance, (int, float)) and balance > 1 else balance}
+        bal = data.get("balance", 0)
+        balance = round(bal / 100, 2) if isinstance(bal, (int, float)) and bal > 1 else bal
     except Exception as e:
-        return {"error": str(e)}
+        pass
+
+    await _init_auto_tables(db_path)
+    history = []
+    try:
+        async with get_db(db_path) as db:
+            cursor = await db.execute(
+                "SELECT balance, recorded_at FROM balance_history ORDER BY recorded_at DESC LIMIT 200",
+            )
+            history = [{"balance": r[0], "time": r[1]} for r in await cursor.fetchall()]
+    except Exception:
+        pass
+
+    return {"balance": balance, "history": list(reversed(history))}
 
 
 @router.post("/api/auto-trading/discover")

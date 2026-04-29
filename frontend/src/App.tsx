@@ -1095,6 +1095,7 @@ function AutoTradingPage() {
     const [trades, setTrades] = useState<any[]>([]);
     const [summary, setSummary] = useState<any>({});
     const [balance, setBalance] = useState<number | null>(null);
+    const [balanceHistory, setBalanceHistory] = useState<any[]>([]);
     const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
     const [matchDetail, setMatchDetail] = useState<any>(null);
     const [loading, setLoading] = useState(false);
@@ -1114,6 +1115,7 @@ function AutoTradingPage() {
         try {
             const data = await autoTradingBalance();
             if (data.balance != null) setBalance(data.balance);
+            if (data.history?.length > 0) setBalanceHistory(data.history);
         } catch {}
     };
 
@@ -1230,6 +1232,40 @@ function AutoTradingPage() {
                     {loading ? "..." : running ? "Stop Auto Trading" : "Start Auto Trading"}
                 </button>
             </div>
+
+            {/* Balance Chart */}
+            {balanceHistory.length > 1 && (
+                <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                    <h4 style={{ marginTop: 0 }}>Balance History</h4>
+                    <ResponsiveContainer width="100%" height={150}>
+                        <LineChart data={balanceHistory}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="time" fontSize={9} interval="preserveStartEnd"
+                                tickFormatter={(t: string) => new Date(t).toLocaleTimeString()} />
+                            <YAxis fontSize={10} domain={['auto', 'auto']} />
+                            <Tooltip contentStyle={{ fontSize: 12 }}
+                                labelFormatter={(t: string) => new Date(t).toLocaleString()} />
+                            <Line type="monotone" dataKey="balance" stroke="#3498db" dot={false} strokeWidth={2} name="Balance ($)" />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
+            {/* P&L Summary */}
+            {trades.length > 0 && (() => {
+                const settled = trades.filter(t => t.status === 'settled');
+                const wins = settled.filter(t => t.won);
+                const totalPnl = settled.reduce((s, t) => s + (t.pnl || 0), 0);
+                return settled.length > 0 ? (
+                    <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 16, display: "flex", gap: 24, fontSize: 13 }}>
+                        <span>Settled: <strong>{settled.length}</strong></span>
+                        <span>Won: <strong style={{ color: "#27ae60" }}>{wins.length}</strong></span>
+                        <span>Lost: <strong style={{ color: "#e74c3c" }}>{settled.length - wins.length}</strong></span>
+                        <span>WR: <strong>{(wins.length/settled.length*100).toFixed(1)}%</strong></span>
+                        <span>P&L: <strong style={{ color: totalPnl >= 0 ? "#27ae60" : "#e74c3c" }}>${(totalPnl/100).toFixed(2)}</strong></span>
+                    </div>
+                ) : null;
+            })()}
 
             {/* Match List */}
             <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 16 }}>
