@@ -765,21 +765,10 @@ async def _auto_loop():
         logger.info("No matches prepared, discovering now...")
         await _discover_matches(client, db_path)
 
-    last_discover = 0
     last_balance_record = -600  # Record immediately on start
-    last_start_retry = 0
     while True:
         try:
             now_ts = datetime.now(timezone.utc).timestamp()
-
-            # Discover and FlashScore in background (don't block polling)
-            if now_ts - last_discover >= DISCOVER_INTERVAL:
-                asyncio.create_task(_discover_matches(client, db_path))
-                last_discover = now_ts
-
-            if now_ts - last_start_retry >= 1800:
-                asyncio.create_task(_retry_unknown_starts(db_path))
-                last_start_retry = now_ts
 
             # Record balance every 10 minutes
             if now_ts - last_balance_record >= 600:
