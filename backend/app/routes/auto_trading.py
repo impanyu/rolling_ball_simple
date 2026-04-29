@@ -154,7 +154,7 @@ async def _discover_matches(client, db_path):
                 continue
 
             volume = float(event_markets[0].get("volume", event_markets[0].get("volume_fp", 0)))
-            if volume < 50:
+            if volume < 200:
                 continue
 
             price_a = round(float(event_markets[0].get("last_price_dollars", 0)) * 100)
@@ -314,6 +314,25 @@ async def _poll_and_trade(client, db_path):
 
     for m in matches:
         try:
+            # Skip matches without confirmed start time (can't trade anyway)
+            if m["status"] == "upcoming" and not m.get("match_start"):
+                continue
+
+            # Skip matches in cooldown (no point polling)
+            async with get_db(db_path) as db:
+                last_trade_q = await db.execute(
+                    "SELECT created_at FROM auto_trades WHERE event_ticker = ? ORDER BY created_at DESC LIMIT 1",
+                    (m["event_ticker"],),
+                )
+                lt_row = await last_trade_q.fetchone()
+            if lt_row:
+                try:
+                    last_t = datetime.fromisoformat(lt_row[0].replace("Z", "+00:00"))
+                    if (now - last_t).total_seconds() < COOLDOWN_MINUTES * 60:
+                        continue
+                except Exception:
+                    pass
+
             market_data = await client.get_market(m["ticker_a"])
             market = market_data.get("market", market_data)
             status = market.get("status", "")
@@ -430,22 +449,6 @@ async def _poll_and_trade(client, db_path):
 
             # Execute trade only with confirmed start time and active match
             if signal["contracts"] > 0 and minutes_played > 0 and m.get("match_start"):
-                # Check cooldown
-                async with get_db(db_path) as db:
-                    last_trade = await db.execute(
-                        "SELECT created_at FROM auto_trades WHERE event_ticker = ? ORDER BY created_at DESC LIMIT 1",
-                        (m["event_ticker"],),
-                    )
-                    lt = await last_trade.fetchone()
-
-                if lt:
-                    try:
-                        last_t = datetime.fromisoformat(lt[0].replace("Z", "+00:00"))
-                        if (now - last_t).total_seconds() < COOLDOWN_MINUTES * 60:
-                            continue
-                    except Exception:
-                        pass
-
                 # Place order
                 ticker = m["ticker_a"] if signal["buy_ticker_idx"] == 0 else m["ticker_b"]
                 try:
