@@ -21,9 +21,8 @@ TENNIS_SERIES = [
 MAX_DAILY_MATCHES = 30
 POLL_INTERVAL = 15
 DISCOVER_INTERVAL = 1800
-COOLDOWN_MINUTES = 30
-MAX_CONTRACTS = 3
-MAX_TRADES_PER_MATCH = 3
+COOLDOWN_MINUTES = 15
+MAX_CONTRACTS = 5
 DOLLARS_PER_UNIT = 10
 
 _auto_task: asyncio.Task | None = None
@@ -413,15 +412,6 @@ async def _poll_and_trade(client, db_path):
                 except Exception as e:
                     logger.warning(f"Cooldown parse error for {m['event_ticker']}: {lt_row[0]} -> {e}")
 
-            # Check max trades per match
-            async with get_db(db_path) as db:
-                trade_count_q = await db.execute(
-                    "SELECT COUNT(*) FROM auto_trades WHERE event_ticker = ?",
-                    (m["event_ticker"],),
-                )
-                trade_count = (await trade_count_q.fetchone())[0]
-            if trade_count >= MAX_TRADES_PER_MATCH:
-                continue
 
             market_data = await client.get_market(m["ticker_a"])
             market = market_data.get("market", market_data)
