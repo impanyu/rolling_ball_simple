@@ -408,10 +408,10 @@ async def _poll_and_trade(client, db_path):
         )
         matches = [dict(r) for r in await cursor.fetchall()]
 
-    # Check pending orders — update status if filled
+    # Check pending orders — update if filled, cancel if >2min old
     async with get_db(db_path) as db:
         pending_orders = await db.execute(
-            "SELECT id, order_id FROM auto_trades WHERE status = 'pending' AND order_id IS NOT NULL"
+            "SELECT id, order_id, created_at FROM auto_trades WHERE status = 'pending' AND order_id IS NOT NULL"
         )
         pending_list = await pending_orders.fetchall()
     for po in pending_list:
@@ -433,11 +433,27 @@ async def _poll_and_trade(client, db_path):
                             (po[0],),
                         )
                     await db.commit()
-                logger.info(f"  Order {po[1]} filled: {filled} contracts")
+                logger.info(f"  Order {po[1]} filled")
             elif status in ("canceled", "cancelled"):
                 async with get_db(db_path) as db:
                     await db.execute("UPDATE auto_trades SET status = 'cancelled' WHERE id = ?", (po[0],))
                     await db.commit()
+            else:
+                # Cancel if pending > 2 minutes
+                try:
+                    ts = po[2].replace("+00:00Z", "Z").replace("Z", "+00:00")
+                    created = datetime.fromisoformat(ts)
+                    if (now - created).total_seconds() > 120:
+                        try:
+                            await client._request("DELETE", f"/portfolio/orders/{po[1]}")
+                            logger.info(f"  Cancelled stale order {po[1]} (>2min)")
+                        except Exception:
+                            pass
+                        async with get_db(db_path) as db:
+                            await db.execute("UPDATE auto_trades SET status = 'cancelled' WHERE id = ?", (po[0],))
+                            await db.commit()
+                except Exception:
+                    pass
         except Exception:
             pass
 
