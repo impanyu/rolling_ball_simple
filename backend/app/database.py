@@ -31,7 +31,11 @@ CREATE TABLE IF NOT EXISTS extracted_data (
     player_ranking INTEGER,
     opponent_ranking INTEGER,
     player_win_rate_3m REAL,
-    opponent_win_rate_3m REAL
+    opponent_win_rate_3m REAL,
+    pre_match_std REAL,
+    pre_match_trades INTEGER,
+    running_min REAL,
+    running_max REAL
 )
 """
 
@@ -42,6 +46,69 @@ CREATE TABLE IF NOT EXISTS player_stats (
     ranking INTEGER,
     win_rate_3m REAL,
     PRIMARY KEY (player_name, match_date)
+)
+"""
+
+SQL_CREATE_MATCH_RESULTS = """
+CREATE TABLE IF NOT EXISTS match_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    winner TEXT NOT NULL,
+    loser TEXT NOT NULL,
+    match_date TEXT NOT NULL,
+    tour TEXT NOT NULL,
+    tournament TEXT,
+    UNIQUE(winner, loser, match_date, tour)
+)
+"""
+
+SQL_CREATE_MATCH_START_TIMES = """
+CREATE TABLE IF NOT EXISTS match_start_times (
+    match_id TEXT PRIMARY KEY,
+    start_time TEXT NOT NULL
+)
+"""
+
+SQL_CREATE_FLASHSCORE_RANKINGS = """
+CREATE TABLE IF NOT EXISTS flashscore_rankings (
+    player_name TEXT NOT NULL,
+    tour TEXT NOT NULL,
+    ranking INTEGER NOT NULL,
+    href TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (player_name, tour)
+)
+"""
+
+SQL_CREATE_MONITORED_MATCHES = """
+CREATE TABLE IF NOT EXISTS monitored_matches (
+    ticker TEXT PRIMARY KEY,
+    event_ticker TEXT NOT NULL,
+    player TEXT NOT NULL,
+    opponent TEXT NOT NULL,
+    player_ranking INTEGER,
+    opponent_ranking INTEGER,
+    initial_price REAL,
+    current_price REAL,
+    status TEXT DEFAULT 'monitoring',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)
+"""
+
+SQL_CREATE_TRADE_LOG = """
+CREATE TABLE IF NOT EXISTS trade_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    player TEXT NOT NULL,
+    opponent TEXT NOT NULL,
+    side TEXT NOT NULL,
+    action TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    count INTEGER NOT NULL,
+    initial_price REAL,
+    status TEXT DEFAULT 'placed',
+    order_id TEXT,
+    created_at TEXT NOT NULL
 )
 """
 
@@ -59,6 +126,11 @@ async def init_db(db_path: str) -> None:
         await db.execute(SQL_CREATE_RAW_PRICES)
         await db.execute(SQL_CREATE_EXTRACTED_DATA)
         await db.execute(SQL_CREATE_PLAYER_STATS)
+        await db.execute(SQL_CREATE_MATCH_RESULTS)
+        await db.execute(SQL_CREATE_MATCH_START_TIMES)
+        await db.execute(SQL_CREATE_FLASHSCORE_RANKINGS)
+        await db.execute(SQL_CREATE_MONITORED_MATCHES)
+        await db.execute(SQL_CREATE_TRADE_LOG)
         for idx_sql in SQL_CREATE_INDEXES:
             await db.execute(idx_sql)
         await db.commit()
