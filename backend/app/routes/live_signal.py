@@ -74,13 +74,25 @@ async def _get_player_rules(db_path, player):
 
 
 async def _get_ranking(db_path, player):
+    parts = player.strip().lower().split()
+    if not parts:
+        return None
     async with get_db(db_path) as db:
         c = await db.execute("SELECT ranking FROM flashscore_rankings WHERE player_name = ? LIMIT 1", (player.lower(),))
         r = await c.fetchone()
         if r: return r[0]
-        c2 = await db.execute("SELECT DISTINCT player_ranking FROM extracted_data WHERE player = ? AND player_ranking IS NOT NULL LIMIT 1", (player,))
-        r2 = await c2.fetchone()
-        return r2[0] if r2 else None
+        if len(parts) >= 2:
+            conditions = " AND ".join(["player_name LIKE ?" for _ in parts])
+            params = [f"%{p}%" for p in parts]
+            c2 = await db.execute(f"SELECT ranking FROM flashscore_rankings WHERE {conditions} LIMIT 1", params)
+            r2 = await c2.fetchone()
+            if r2: return r2[0]
+        c3 = await db.execute("SELECT ranking FROM flashscore_rankings WHERE player_name LIKE ? LIMIT 1", (f"%{parts[-1]}%",))
+        r3 = await c3.fetchone()
+        if r3: return r3[0]
+        c4 = await db.execute("SELECT DISTINCT player_ranking FROM extracted_data WHERE player = ? AND player_ranking IS NOT NULL LIMIT 1", (player,))
+        r4 = await c4.fetchone()
+        return r4[0] if r4 else None
 
 
 @router.get("/api/live-signal")
