@@ -679,8 +679,7 @@ async def _poll_and_trade(client, db_path):
                         side="yes",
                         action="buy",
                         count=count,
-                        type="limit",
-                        yes_price=price_cents,
+                        type="market",
                     )
                     order_id = result.get("order", {}).get("order_id", "")
                     logger.info(f"AUTO TRADE: {signal['rec']} @ {price_cents}c, order={order_id}")
