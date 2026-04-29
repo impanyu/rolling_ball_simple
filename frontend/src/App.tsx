@@ -1144,10 +1144,12 @@ function AutoTradingPage() {
         setLoading(false);
     };
 
-    const openMatch = async (eventTicker: string) => {
-        setSelectedMatch(eventTicker);
+    const [selectedMatchData, setSelectedMatchData] = useState<any>(null);
+    const openMatch = async (m: any) => {
+        setSelectedMatch(m.event_ticker);
+        setSelectedMatchData(m);
         try {
-            const data = await autoTradingMatchDetail(eventTicker);
+            const data = await autoTradingMatchDetail(m.event_ticker);
             setMatchDetail(data);
         } catch {}
     };
@@ -1165,9 +1167,8 @@ function AutoTradingPage() {
     const detailPrevPriceRef = useRef<number | null>(null);
 
     const doPollDetail = useCallback(async () => {
-        if (!selectedMatch) return;
-        const m = matches.find(x => x.event_ticker === selectedMatch);
-        if (!m) return;
+        if (!selectedMatch || !selectedMatchData) return;
+        const m = selectedMatchData;
         try {
             const result = await pollLiveMatch({
                 event_ticker: m.event_ticker,
@@ -1222,7 +1223,7 @@ function AutoTradingPage() {
                 return next.length > 500 ? next.slice(-500) : next;
             });
         } catch {}
-    }, [selectedMatch, matches]);
+    }, [selectedMatch, selectedMatchData]);
 
     useEffect(() => {
         if (!selectedMatch) return;
@@ -1492,7 +1493,7 @@ function AutoTradingPage() {
                                     {m.last_rec || "-"}
                                 </td>
                                 <td style={{ padding: 4 }}>
-                                    <button onClick={() => openMatch(m.event_ticker)}
+                                    <button onClick={() => openMatch(m)}
                                         style={{ padding: "2px 8px", cursor: "pointer", fontSize: 11 }}>
                                         Details
                                     </button>
@@ -1533,7 +1534,7 @@ function AutoTradingPage() {
                                                 {settled.length > 0 ? `$${(pnl/100).toFixed(2)}` : "-"}
                                             </td>
                                             <td style={{ padding: 4 }}>
-                                                <button onClick={() => openMatch(m.event_ticker)}
+                                                <button onClick={() => openMatch(m)}
                                                     style={{ padding: "2px 8px", cursor: "pointer", fontSize: 11 }}>Details</button>
                                             </td>
                                         </tr>
