@@ -447,6 +447,26 @@ async def _poll_and_trade(client, db_path):
                 except Exception:
                     pass
 
+            # If supposed to be in_progress (minutes > 10) but price barely moved, match may be delayed
+            if minutes_played > 10 and m.get("init_price"):
+                price_change = abs(cp - m["init_price"])
+                if price_change <= 2 and m["status"] == "in_progress":
+                    # Price stale — re-check start time, match might be delayed
+                    try:
+                        from app.scraper.flashscore_results import scrape_live_match_start
+                        new_start = await scrape_live_match_start(m["player_a"], m["player_b"], db_path)
+                        if new_start and new_start != m.get("match_start"):
+                            async with get_db(db_path) as db:
+                                await db.execute(
+                                    "UPDATE auto_matches SET match_start = ?, status = 'upcoming', updated_at = ? WHERE event_ticker = ?",
+                                    (new_start, now_str, m["event_ticker"]),
+                                )
+                                await db.commit()
+                            logger.info(f"Match delayed: {m['player_a']} vs {m['player_b']} -> new start {new_start}")
+                            continue
+                    except Exception:
+                        pass
+
             # Detect match start from occurrence_datetime if not set
             if not m.get("match_start"):
                 occ = market.get("occurrence_datetime")
