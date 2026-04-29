@@ -420,7 +420,7 @@ async def _poll_and_trade(client, db_path):
             order_info = order_data.get("order", order_data)
             filled = int(order_info.get("count_filled", 0) or 0)
             status = order_info.get("status", "")
-            if filled > 0:
+            if filled > 0 or status == "executed":
                 async with get_db(db_path) as db:
                     await db.execute(
                         "UPDATE auto_trades SET status = 'filled', contracts = ? WHERE id = ?",
@@ -677,7 +677,7 @@ async def _poll_and_trade(client, db_path):
                     except Exception as e:
                         logger.warning(f"  Order check failed: {e}")
 
-                    if filled_count > 0:
+                    if filled_count > 0 or order_status == "executed":
                         trade_status = "filled"
                     elif order_status in ("canceled", "cancelled"):
                         trade_status = "cancelled"
