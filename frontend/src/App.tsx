@@ -1226,7 +1226,7 @@ function AutoTradingPage() {
     }, [selectedMatch, selectedMatchData]);
 
     useEffect(() => {
-        if (!selectedMatch) return;
+        if (!selectedMatch || !selectedMatchData) return;
         // Reset state
         detailMatchStartRef.current = null;
         detailInitPriceRef.current = null;
@@ -1241,7 +1241,7 @@ function AutoTradingPage() {
         doPollDetail();
         const iv = setInterval(doPollDetail, 15000);
         return () => clearInterval(iv);
-    }, [selectedMatch]);
+    }, [selectedMatch, selectedMatchData]);
 
     if (selectedMatch) {
         const sig = detailSignal;
