@@ -1155,88 +1155,217 @@ function AutoTradingPage() {
     const statusColor = (s: string) => s === "active" ? "#27ae60" : s === "upcoming" ? "#3498db" : "#888";
     const sigColor = (s: string) => s === "STRONG" ? "#27ae60" : s === "MODERATE" ? "#e67e22" : s === "WEAK" ? "#888" : "#ccc";
 
-    // Auto-refresh match detail
+    // Live Signal state for detail view
+    const [detailSignal, setDetailSignal] = useState<any>(null);
+    const [detailHistory, setDetailHistory] = useState<any[]>([]);
+    const detailMatchStartRef = useRef<string | null>(null);
+    const detailInitPriceRef = useRef<number | null>(null);
+    const detailRunningMinRef = useRef<number | null>(null);
+    const detailRunningMaxRef = useRef<number | null>(null);
+    const detailPrevPriceRef = useRef<number | null>(null);
+
+    const doPollDetail = useCallback(async () => {
+        if (!selectedMatch) return;
+        const m = matches.find(x => x.event_ticker === selectedMatch);
+        if (!m) return;
+        try {
+            const result = await pollLiveMatch({
+                event_ticker: m.event_ticker,
+                ticker_a: m.ticker_a,
+                init_price: detailInitPriceRef.current ?? undefined,
+                running_min: detailRunningMinRef.current ?? undefined,
+                running_max: detailRunningMaxRef.current ?? undefined,
+                match_start: detailMatchStartRef.current ?? undefined,
+                prev_price: detailPrevPriceRef.current ?? undefined,
+            });
+            if (result.error || result.status === "closed") return;
+
+            const rawPrice = result.raw_price;
+            if (detailInitPriceRef.current === null) detailInitPriceRef.current = rawPrice;
+            detailRunningMinRef.current = result.running_min;
+            detailRunningMaxRef.current = result.running_max;
+            detailPrevPriceRef.current = rawPrice;
+
+            if (result.match_start && !detailMatchStartRef.current) {
+                detailMatchStartRef.current = result.match_start;
+                try {
+                    const bf = await backfillLiveMatch({
+                        event_ticker: m.event_ticker,
+                        ticker_a: m.ticker_a,
+                        match_start: result.match_start,
+                    });
+                    if (bf.history?.length > 0) {
+                        if (bf.raw_init_price != null) detailInitPriceRef.current = bf.raw_init_price;
+                        setDetailHistory(bf.history.map((h: any) => ({
+                            ...h,
+                            time: new Date(h.time).toLocaleTimeString(),
+                            rec: "",
+                            strength: "",
+                        })));
+                    }
+                } catch {}
+            }
+
+            setDetailSignal(result);
+            setDetailHistory(prev => {
+                const next = [...prev, {
+                    time: new Date().toLocaleTimeString(),
+                    minutes: result.minutes_played || 0,
+                    price_a: result.current_price_a,
+                    price_b: 100 - result.current_price_a,
+                    score_a: result.score_a,
+                    score_b: result.score_b,
+                    diff: result.score_diff,
+                    rec: result.recommendation,
+                    strength: result.strength,
+                }];
+                return next.length > 500 ? next.slice(-500) : next;
+            });
+        } catch {}
+    }, [selectedMatch, matches]);
+
     useEffect(() => {
         if (!selectedMatch) return;
-        const iv = setInterval(async () => {
-            try {
-                const data = await autoTradingMatchDetail(selectedMatch);
-                setMatchDetail(data);
-            } catch {}
-        }, 15000);
+        // Reset state
+        detailMatchStartRef.current = null;
+        detailInitPriceRef.current = null;
+        detailRunningMinRef.current = null;
+        detailRunningMaxRef.current = null;
+        detailPrevPriceRef.current = null;
+        setDetailSignal(null);
+        setDetailHistory([]);
+        // Load trades
+        autoTradingMatchDetail(selectedMatch).then(d => setMatchDetail(d)).catch(() => {});
+        // Start polling
+        doPollDetail();
+        const iv = setInterval(doPollDetail, 15000);
         return () => clearInterval(iv);
     }, [selectedMatch]);
 
-    if (selectedMatch && matchDetail) {
-        const m = matchDetail.match;
-        const history = matchDetail.history || [];
-        const mTrades = matchDetail.trades || [];
+    if (selectedMatch) {
+        const sig = detailSignal;
+        const mTrades = matchDetail?.trades || [];
         const settled = mTrades.filter((t: any) => t.status === "settled");
         const totalPnl = settled.reduce((s: number, t: any) => s + (t.pnl || 0), 0);
-        const sigC = sigColor(m?.last_rec?.split(" ")[0] || "");
+        const sigC = sig?.strength === "STRONG" ? "#27ae60" : sig?.strength === "MODERATE" ? "#e67e22" : sig?.strength === "WEAK" ? "#888" : "#ccc";
+
         return (
             <div style={{ padding: 20 }}>
-                <button onClick={() => { setSelectedMatch(null); setMatchDetail(null); }} style={{ marginBottom: 12, cursor: "pointer" }}>Back to List</button>
+                <button onClick={() => { setSelectedMatch(null); setMatchDetail(null); setDetailSignal(null); setDetailHistory([]); }}
+                    style={{ marginBottom: 12, cursor: "pointer" }}>Back to List</button>
                 <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 20 }}>
                     {/* Header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                            <h3 style={{ margin: 0 }}>{m?.player_a} (#{m?.rank_a}) vs {m?.player_b} (#{m?.rank_b})</h3>
-                            <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
-                                Status: <strong style={{ color: statusColor(m?.status) }}>{m?.status}</strong>
-                                {m?.match_start && <> | Started: {new Date(m.match_start).toLocaleString()}</>}
-                                | Price: <strong>{m?.current_price}</strong> - <strong>{100 - (m?.current_price || 50)}</strong>
-                            </div>
+                    <div>
+                        <h3 style={{ margin: 0 }}>
+                            {sig?.player_a || "..."} {sig?.rank_a ? `(#${sig.rank_a})` : ""}
+                            {" vs "}
+                            {sig?.player_b || "..."} {sig?.rank_b ? `(#${sig.rank_b})` : ""}
+                        </h3>
+                        <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                            Match start: <strong>{sig?.match_start ? new Date(sig.match_start).toLocaleString() : "detecting..."}</strong>
+                            {sig?.minutes_played != null && <> | Minutes played: <strong>{sig.minutes_played}</strong></>}
                         </div>
                     </div>
 
                     {/* Signal Box */}
-                    {m?.last_rec && (
+                    {sig && (
                         <div style={{ padding: 16, border: `3px solid ${sigC}`, borderRadius: 8, marginTop: 12, marginBottom: 16 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <div style={{ fontSize: 24, fontWeight: 700, color: sigC }}>{m.last_rec}</div>
-                                <div style={{ fontSize: 13 }}>
-                                    Score diff: <strong>{m.last_diff}</strong>
+                                <div style={{ fontSize: 28, fontWeight: 700, color: sigC }}>{sig.recommendation}</div>
+                                <div style={{ textAlign: "right", fontSize: 13 }}>
+                                    <div>Price: <strong>{sig.current_price_a}</strong> - <strong>{100 - sig.current_price_a}</strong></div>
+                                    {sig.buy_price != null && <div>Buy at: <strong>{sig.buy_price}c x{sig.contracts}</strong></div>}
                                 </div>
+                            </div>
+                            <div style={{ fontSize: 13, marginTop: 8, display: "flex", gap: 24 }}>
+                                <span>{sig.player_a}: <strong>{sig.score_a}</strong> (p:{sig.player_score_a} g:{sig.global_score_a})</span>
+                                <span>{sig.player_b}: <strong>{sig.score_b}</strong> (p:{sig.player_score_b} g:{sig.global_score_b})</span>
+                                <span>Diff: <strong>{sig.score_diff}</strong></span>
                             </div>
                         </div>
                     )}
 
-                    {/* Price Chart */}
-                    {history.length > 1 && (
+                    {/* Charts */}
+                    {detailHistory.length > 1 && (
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
                             <div>
                                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Price</div>
                                 <ResponsiveContainer width="100%" height={200}>
-                                    <LineChart data={history}>
+                                    <LineChart data={detailHistory}>
                                         <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="t" fontSize={9} interval="preserveStartEnd"
-                                            tickFormatter={(t: string) => t.length > 10 ? new Date(t).toLocaleTimeString() : t} />
+                                        <XAxis dataKey="time" fontSize={10} interval="preserveStartEnd" />
                                         <YAxis domain={[0, 100]} fontSize={10} />
                                         <Tooltip contentStyle={{ fontSize: 12 }} />
                                         <ReferenceLine y={50} stroke="#ccc" strokeDasharray="3 3" />
-                                        <Line type="monotone" dataKey="cp" stroke="#3498db" dot={false} strokeWidth={2} name={m?.player_a || "A"} />
+                                        <Line type="monotone" dataKey="price_a" stroke="#3498db" name={sig?.player_a || "A"} dot={false} strokeWidth={2} />
+                                        <Line type="monotone" dataKey="price_b" stroke="#e74c3c" name={sig?.player_b || "B"} dot={false} strokeWidth={2} />
+                                        <Legend fontSize={11} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
                             <div>
-                                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Minutes Played</div>
+                                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Score & Signal</div>
                                 <ResponsiveContainer width="100%" height={200}>
-                                    <LineChart data={history}>
+                                    <LineChart data={detailHistory}>
                                         <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="t" fontSize={9} interval="preserveStartEnd"
-                                            tickFormatter={(t: string) => t.length > 10 ? new Date(t).toLocaleTimeString() : t} />
+                                        <XAxis dataKey="time" fontSize={10} interval="preserveStartEnd" />
                                         <YAxis fontSize={10} />
                                         <Tooltip contentStyle={{ fontSize: 12 }} />
-                                        <Line type="monotone" dataKey="min" stroke="#e67e22" dot={false} strokeWidth={2} name="Minutes" />
+                                        <ReferenceLine y={0} stroke="#ccc" strokeDasharray="3 3" />
+                                        <Line type="monotone" dataKey="score_a" stroke="#3498db" name={`${sig?.player_a || "A"} score`} dot={false} strokeWidth={2} />
+                                        <Line type="monotone" dataKey="score_b" stroke="#e74c3c" name={`${sig?.player_b || "B"} score`} dot={false} strokeWidth={2} />
+                                        <Line type="monotone" dataKey="diff" stroke="#2ecc71" name="Diff" dot={false} strokeWidth={2} strokeDasharray="5 5" />
+                                        <Legend fontSize={11} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
                         </div>
                     )}
 
-                    {/* Trade History */}
-                    <div style={{ marginTop: 16 }}>
+                    {/* Triggered Rules */}
+                    {sig && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, fontSize: 12, marginBottom: 16 }}>
+                            <div>
+                                <strong>{sig.player_a} player ({sig.triggered_a?.length || 0}):</strong>
+                                {sig.triggered_a?.map((r: any, i: number) => (
+                                    <div key={i} style={{ color: r.win_rate >= 50 ? "#27ae60" : "#e74c3c" }}>
+                                        {r.category}/{r.condition}: {r.win_rate}% (N={r.sample_size})
+                                    </div>
+                                ))}
+                                {sig.global_triggered_a?.length > 0 && (
+                                    <>
+                                        <strong style={{ marginTop: 6, display: "block" }}>Global ({sig.global_triggered_a.length}):</strong>
+                                        {sig.global_triggered_a.map((r: any, i: number) => (
+                                            <div key={`g${i}`} style={{ color: r.win_rate >= 50 ? "#2ecc71" : "#e67e22", fontStyle: "italic" }}>
+                                                {r.category}/{r.condition}: {r.win_rate}% (N={r.sample_size})
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+                            <div>
+                                <strong>{sig.player_b} player ({sig.triggered_b?.length || 0}):</strong>
+                                {sig.triggered_b?.map((r: any, i: number) => (
+                                    <div key={i} style={{ color: r.win_rate >= 50 ? "#27ae60" : "#e74c3c" }}>
+                                        {r.category}/{r.condition}: {r.win_rate}% (N={r.sample_size})
+                                    </div>
+                                ))}
+                                {sig.global_triggered_b?.length > 0 && (
+                                    <>
+                                        <strong style={{ marginTop: 6, display: "block" }}>Global ({sig.global_triggered_b.length}):</strong>
+                                        {sig.global_triggered_b.map((r: any, i: number) => (
+                                            <div key={`g${i}`} style={{ color: r.win_rate >= 50 ? "#2ecc71" : "#e67e22", fontStyle: "italic" }}>
+                                                {r.category}/{r.condition}: {r.win_rate}% (N={r.sample_size})
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Trade History for this match */}
+                    <div style={{ marginTop: 8 }}>
                         <h4 style={{ marginTop: 0 }}>
                             Trades ({mTrades.length})
                             {settled.length > 0 && (
