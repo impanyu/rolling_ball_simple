@@ -1304,35 +1304,44 @@ function AutoTradingPage() {
                 </table>
             </div>
 
-            {/* Trade History */}
+            {/* Completed Matches */}
             <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
-                <h4 style={{ marginTop: 0 }}>Trade History ({trades.length})</h4>
-                {trades.length === 0 ? (
-                    <div style={{ color: "#888", fontSize: 13 }}>No trades yet.</div>
-                ) : (
-                    <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
-                        <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
-                            <th style={{ padding: 3 }}>Time</th><th style={{ padding: 3 }}>Player</th>
-                            <th style={{ padding: 3 }}>Side</th><th style={{ padding: 3 }}>Price</th>
-                            <th style={{ padding: 3 }}>Qty</th><th style={{ padding: 3 }}>Diff</th>
-                            <th style={{ padding: 3 }}>Status</th><th style={{ padding: 3 }}>P&L</th>
-                        </tr></thead>
-                        <tbody>
-                            {trades.map((t, i) => (
-                                <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
-                                    <td style={{ padding: 3 }}>{t.created_at ? new Date(t.created_at).toLocaleString() : ""}</td>
-                                    <td style={{ padding: 3 }}>{t.player}</td>
-                                    <td style={{ padding: 3 }}>{t.side}</td>
-                                    <td style={{ padding: 3 }}>{t.price}c</td>
-                                    <td style={{ padding: 3 }}>x{t.contracts}</td>
-                                    <td style={{ padding: 3 }}>{t.score_diff}</td>
-                                    <td style={{ padding: 3, color: t.status === "placed" ? "#3498db" : t.won ? "#27ae60" : "#e74c3c" }}>{t.status}</td>
-                                    <td style={{ padding: 3, fontWeight: 600 }}>{t.pnl != null ? `$${(t.pnl/100).toFixed(2)}` : "-"}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                <h4 style={{ marginTop: 0 }}>Completed Matches</h4>
+                {(() => {
+                    const completed = matches.filter(m => m.status === "completed");
+                    if (completed.length === 0) return <div style={{ color: "#888", fontSize: 13 }}>No completed matches yet.</div>;
+                    const matchTrades = (et: string) => trades.filter(t => t.event_ticker === et);
+                    return (
+                        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                            <thead><tr style={{ borderBottom: "2px solid #ddd", textAlign: "left" }}>
+                                <th style={{ padding: 4 }}>Match</th><th style={{ padding: 4 }}>Trades</th>
+                                <th style={{ padding: 4 }}>Won</th><th style={{ padding: 4 }}>P&L</th><th style={{ padding: 4 }}></th>
+                            </tr></thead>
+                            <tbody>
+                                {completed.map((m, i) => {
+                                    const mt = matchTrades(m.event_ticker);
+                                    const settled = mt.filter(t => t.status === "settled");
+                                    const wins = settled.filter(t => t.won);
+                                    const pnl = settled.reduce((s: number, t: any) => s + (t.pnl || 0), 0);
+                                    return (
+                                        <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                                            <td style={{ padding: 4 }}>{m.player_a} vs {m.player_b}</td>
+                                            <td style={{ padding: 4 }}>{mt.length}</td>
+                                            <td style={{ padding: 4 }}>{wins.length}/{settled.length}</td>
+                                            <td style={{ padding: 4, fontWeight: 600, color: pnl >= 0 ? "#27ae60" : "#e74c3c" }}>
+                                                {settled.length > 0 ? `$${(pnl/100).toFixed(2)}` : "-"}
+                                            </td>
+                                            <td style={{ padding: 4 }}>
+                                                <button onClick={() => openMatch(m.event_ticker)}
+                                                    style={{ padding: "2px 8px", cursor: "pointer", fontSize: 11 }}>Details</button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    );
+                })()}
             </div>
         </div>
     );
