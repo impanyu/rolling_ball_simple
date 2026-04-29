@@ -1154,7 +1154,7 @@ function AutoTradingPage() {
         } catch {}
     };
 
-    const statusColor = (s: string) => s === "active" ? "#27ae60" : s === "upcoming" ? "#3498db" : "#888";
+    const statusColor = (s: string) => s === "in_progress" ? "#27ae60" : s === "upcoming" ? "#3498db" : "#888";
     const sigColor = (s: string) => s === "STRONG" ? "#27ae60" : s === "MODERATE" ? "#e67e22" : s === "WEAK" ? "#888" : "#ccc";
 
     // Live Signal state for detail view
@@ -1423,7 +1423,7 @@ function AutoTradingPage() {
                 <div>
                     <span style={{ fontSize: 14 }}>
                         Balance: <strong>${balance != null ? balance.toFixed(2) : "..."}</strong>
-                        {" | "}Active: <strong>{summary.active || 0}</strong>
+                        {" | "}In Progress: <strong>{summary.active || 0}</strong>
                         {" | "}Upcoming: <strong>{summary.upcoming || 0}</strong>
                         {" | "}Trades: <strong>{summary.total_trades || 0}</strong>
                     </span>
@@ -1472,7 +1472,7 @@ function AutoTradingPage() {
             {/* Match List */}
             <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, marginBottom: 16 }}>
                 {(() => {
-                    const active = matches.filter(m => m.status === "upcoming" || m.status === "active");
+                    const active = matches.filter(m => m.status === "upcoming" || m.status === "in_progress");
                     return <>
                 <h4 style={{ marginTop: 0 }}>Trading Matches ({active.length})</h4>
                 {active.length === 0 && <div style={{ color: "#888", fontSize: 13 }}>No active matches.</div>}

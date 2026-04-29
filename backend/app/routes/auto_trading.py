@@ -154,7 +154,7 @@ async def _discover_matches(client, db_path):
                 continue
 
             volume = float(event_markets[0].get("volume", event_markets[0].get("volume_fp", 0)))
-            if volume < 200:
+            if volume < 5000:
                 continue
 
             price_a = round(float(event_markets[0].get("last_price_dollars", 0)) * 100)
@@ -307,7 +307,7 @@ async def _poll_and_trade(client, db_path):
 
     async with get_db(db_path) as db:
         cursor = await db.execute(
-            "SELECT * FROM auto_matches WHERE trade_date = ? AND status IN ('upcoming', 'active')",
+            "SELECT * FROM auto_matches WHERE trade_date = ? AND status IN ('upcoming', 'in_progress')",
             (today,),
         )
         matches = [dict(r) for r in await cursor.fetchall()]
@@ -431,7 +431,7 @@ async def _poll_and_trade(client, db_path):
                 cp, ip, rmin, rmax, minutes_played, recent_change,
             )
 
-            new_status = "active" if minutes_played > 0 else "upcoming"
+            new_status = "in_progress" if minutes_played > 0 else "upcoming"
 
             async with get_db(db_path) as db:
                 await db.execute(
@@ -571,7 +571,7 @@ async def auto_status():
         trades = [dict(r) for r in await cursor2.fetchall()]
 
     total_pnl = sum(t.get("pnl", 0) or 0 for t in trades)
-    active = sum(1 for m in matches if m["status"] == "active")
+    active = sum(1 for m in matches if m["status"] == "in_progress")
     upcoming = sum(1 for m in matches if m["status"] == "upcoming")
 
     return {
